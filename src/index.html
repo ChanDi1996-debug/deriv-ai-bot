@@ -3,56 +3,304 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Deriv WS Auth — Minimal</title>
-<style>
-  :root{color-scheme:dark}
-  body{background:#0b1220;color:#e2e8f0;font-family:system-ui,Segoe UI,Inter,Roboto,sans-serif;margin:0;padding:24px}
-  label,input,button{font-size:14px}
-  input{width:380px;max-width:100%;padding:8px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0}
-  button{padding:8px 12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;cursor:pointer}
-  #log{white-space:pre-wrap;font-family:ui-monospace,Consolas,Menlo,monospace;font-size:12px;margin-top:16px;background:#0f172a;border:1px solid #334155;border-radius:12px;padding:12px;min-height:160px}
-</style>
+<title>Deriv AI Bot</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>:root{color-scheme:dark}</style>
 </head>
-<body>
-<h1>Deriv WebSocket — Quick Auth</h1>
-<p>Enter your <b>App ID</b> and <b>Token</b>. Nothing is stored.</p>
-<div>
-  <label>App ID<br><input id="appId" placeholder="e.g., 1089"/></label>
+<body class="bg-slate-900 text-slate-100 font-[Inter]">
+<div class="max-w-5xl mx-auto p-4 space-y-4">
+  <h1 class="text-xl font-bold">Deriv AI Bot</h1>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="space-y-2">
+      <label class="block">Token
+        <input id="token" type="password" class="mt-1 w-full p-2 rounded bg-slate-800 border border-slate-600" placeholder="Deriv API token"/>
+      </label>
+      <label class="block">Symbol
+        <select id="symbol" class="mt-1 w-full p-2 rounded bg-slate-800 border border-slate-600">
+          <option value="R_100">R_100</option>
+          <option value="R_75">R_75</option>
+          <option value="R_50">R_50</option>
+          <option value="R_25">R_25</option>
+          <option value="R_10">R_10</option>
+        </select>
+      </label>
+      <label class="block">Long threshold
+        <input id="long_threshold" type="number" class="mt-1 w-full p-2 rounded bg-slate-800 border border-slate-600" value="60"/>
+      </label>
+      <label class="block">Short threshold
+        <input id="short_threshold" type="number" class="mt-1 w-full p-2 rounded bg-slate-800 border border-slate-600" value="60"/>
+      </label>
+      <label class="block">Stake % of equity
+        <input id="stake_pct" type="number" step="0.1" class="mt-1 w-full p-2 rounded bg-slate-800 border border-slate-600" value="0.5"/>
+      </label>
+      <label class="block">Daily loss cap
+        <input id="loss_cap" type="number" class="mt-1 w-full p-2 rounded bg-slate-800 border border-slate-600" value="100"/>
+      </label>
+      <label class="block">Daily trade cap
+        <input id="trade_cap" type="number" class="mt-1 w-full p-2 rounded bg-slate-800 border border-slate-600" value="100"/>
+      </label>
+      <label class="block">Max consecutive losses
+        <input id="loss_streak_cap" type="number" class="mt-1 w-full p-2 rounded bg-slate-800 border border-slate-600" value="5"/>
+      </label>
+      <div class="flex gap-2 pt-2 flex-wrap">
+        <button id="startBtn" class="px-3 py-2 bg-green-600 rounded">Start</button>
+        <button id="stopBtn" class="px-3 py-2 bg-red-600 rounded">Stop</button>
+        <button id="pauseBtn" class="px-3 py-2 bg-yellow-600 rounded">Pause/Resume</button>
+        <button id="resetBtn" class="px-3 py-2 bg-slate-700 rounded">Reset config</button>
+      </div>
+    </div>
+    <div class="space-y-2 text-sm">
+      <div>Connection: <span id="status" class="font-semibold">DISCONNECTED</span></div>
+      <div>Balance: <span id="balance">0</span></div>
+      <div>Confluence score: <span id="score">0</span></div>
+      <canvas id="chart" height="120"></canvas>
+      <div id="metrics" class="space-y-1"></div>
+    </div>
+  </div>
+  <pre id="log" class="h-48 overflow-y-auto bg-slate-800 p-2 rounded text-xs"></pre>
 </div>
-<div style="margin-top:8px">
-  <label>Token<br><input id="token" placeholder="Paste your Deriv API token"/></label>
-</div>
-<div style="margin-top:12px">
-  <button id="connectBtn">Connect & Authorize</button>
-</div>
-<pre id="log"></pre>
-<script>
-const log = (m)=>{ const el=document.getElementById('log'); el.textContent += `[${new Date().toLocaleTimeString()}] ${m}\n`; el.scrollTop=el.scrollHeight; };
 
-document.getElementById('connectBtn').onclick = async () => {
-  const appId = document.getElementById('appId').value.trim();
-  const token = document.getElementById('token').value.trim();
-  if(!appId || !token){ log('Enter App ID and Token.'); return; }
-  const url = `wss://ws.derivws.com/websockets/v3?app_id=${encodeURIComponent(appId)}`;
-  log(`Connecting → ${url}`);
-  const ws = new WebSocket(url);
-  ws.onopen = () => {
-    log('WS connected. Authorizing...');
-    ws.send(JSON.stringify({authorize: token}));
-  };
-  ws.onmessage = (ev) => {
-    const data = JSON.parse(ev.data);
-    if(data.msg_type === 'authorize'){
-      log(`Authorized: ${data.authorize.loginid} | Balance: ${data.authorize.balance} ${data.authorize.currency}`);
-    }else if(data.error){
-      log('Error: '+data.error.message);
-    }else{
-      log('Message: '+data.msg_type);
-    }
-  };
-  ws.onerror = () => log('WS error');
-  ws.onclose = () => log('WS closed');
+<!-- library module -->
+<script type="module" id="botlib">
+/** Exponential backoff with full jitter */
+export function calcBackoff(attempt, base=500, max=15000, rand=Math.random){
+  const cap = Math.min(max, base * 2 ** attempt);
+  return Math.floor(rand() * cap);
+}
+
+/** Simple async mutex */
+export class Mutex{
+  constructor(){this.locked=false;}
+  async run(fn){if(this.locked)return false;this.locked=true;try{return await fn();}finally{this.locked=false;}}
+}
+
+/** Risk gate check */
+export function riskCheck(state, cfg){
+  const stake = state.equity * cfg.stake_pct_of_equity / 100;
+  if(state.daily_loss >= cfg.daily_loss_cap)return {allowed:false, reason:'daily_loss_cap'};
+  if(state.daily_trades >= cfg.daily_trade_cap)return {allowed:false, reason:'daily_trade_cap'};
+  if(state.consec_losses >= cfg.max_consecutive_losses)return {allowed:false, reason:'max_consecutive_losses'};
+  return {allowed:true, stake};
+}
+
+/** EMA */
+export function EMA(period, data){
+  if(data.length===0) return 0;
+  const k = 2/(period+1);
+  let ema = data[0];
+  for(let i=1;i<data.length;i++) ema = data[i]*k + ema*(1-k);
+  return ema;
+}
+
+/** RSI */
+export function RSI(data, period=14){
+  if(data.length<=period) return 0;
+  let gains=0,losses=0;
+  for(let i=1;i<=period;i++){
+    const diff=data[i]-data[i-1];
+    if(diff>=0)gains+=diff;else losses-=diff;
+  }
+  gains/=period; losses/=period;
+  let rs=gains/(losses||1);
+  let rsi=100-100/(1+rs);
+  for(let i=period+1;i<data.length;i++){
+    const diff=data[i]-data[i-1];
+    const gain=diff>0?diff:0; const loss=diff<0?-diff:0;
+    gains=(gains*(period-1)+gain)/period;
+    losses=(losses*(period-1)+loss)/period;
+    rs=gains/(losses||1);
+    rsi=100-100/(1+rs);
+  }
+  return rsi;
+}
+
+/** MACD */
+export function MACD(data, fast=12, slow=26, signal=9){
+  if(data.length<slow) return {macd:0, signal:0, histogram:0};
+  const emaFast=[]; const emaSlow=[];
+  let ef = EMA(fast, data.slice(0, slow));
+  let es = EMA(slow, data.slice(0, slow));
+  for(let i=slow;i<data.length;i++){
+    ef = EMA(fast, data.slice(i-fast+1,i+1));
+    es = EMA(slow, data.slice(i-slow+1,i+1));
+    emaFast.push(ef); emaSlow.push(es);
+  }
+  const macdLine = emaFast.map((v,i)=>v-emaSlow[i]);
+  const signalLine = macdLine.length>=signal? EMA(signal, macdLine.slice(-signal)) : 0;
+  const macd = macdLine[macdLine.length-1] || 0;
+  return {macd, signal: signalLine, histogram: macd - signalLine};
+}
+
+/** ATR using tick-range proxy */
+export function ATR(candles, period=14){
+  if(candles.length<2) return 0;
+  const trs=[];
+  for(let i=1;i<candles.length;i++){
+    const prev=candles[i-1]; const curr=candles[i];
+    const tr = Math.max(curr.high-curr.low, Math.abs(curr.high-prev.close), Math.abs(curr.low-prev.close));
+    trs.push(tr);
+  }
+  return EMA(period, trs);
+}
+
+export function isBullishEngulfing(prev, curr){
+  const prevBear = prev.close < prev.open;
+  const currBull = curr.close > curr.open;
+  return prevBear && currBull && curr.open < prev.close && curr.close > prev.open;
+}
+export function isBearishEngulfing(prev, curr){
+  const prevBull = prev.close > prev.open;
+  const currBear = curr.close < curr.open;
+  return prevBull && currBear && curr.open > prev.close && curr.close < prev.open;
+}
+</script>
+
+<!-- main bot -->
+<script type="module">
+import {EMA,RSI,MACD,ATR,isBullishEngulfing,isBearishEngulfing,calcBackoff,Mutex,riskCheck} from './index.html#botlib';
+
+const logEl=document.getElementById('log');
+const statusEl=document.getElementById('status');
+const balanceEl=document.getElementById('balance');
+const scoreEl=document.getElementById('score');
+const metricsEl=document.getElementById('metrics');
+const chartCtx=document.getElementById('chart').getContext('2d');
+const tokenInput=document.getElementById('token');
+const symbolSelect=document.getElementById('symbol');
+const startBtn=document.getElementById('startBtn');
+const stopBtn=document.getElementById('stopBtn');
+const pauseBtn=document.getElementById('pauseBtn');
+const resetBtn=document.getElementById('resetBtn');
+const cfgEls={
+  long_threshold:document.getElementById('long_threshold'),
+  short_threshold:document.getElementById('short_threshold'),
+  stake_pct:document.getElementById('stake_pct'),
+  loss_cap:document.getElementById('loss_cap'),
+  trade_cap:document.getElementById('trade_cap'),
+  loss_streak_cap:document.getElementById('loss_streak_cap')
 };
+
+function log(msg){
+  const t=new Date().toLocaleTimeString();
+  logEl.textContent += `[${t}] ${msg}\n`;
+  logEl.scrollTop=logEl.scrollHeight;
+}
+
+// persist config
+const STORAGE_KEY='deriv_ai_bot_cfg';
+function loadCfg(){const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):{};}
+function saveCfg(cfg){localStorage.setItem(STORAGE_KEY,JSON.stringify(cfg));}
+
+// initial cfg
+const cfg=Object.assign({
+  symbol:'R_100',
+  long_threshold:60,
+  short_threshold:60,
+  stake_pct:0.5,
+  loss_cap:100,
+  trade_cap:100,
+  loss_streak_cap:5
+}, loadCfg());
+
+// apply cfg to UI
+symbolSelect.value=cfg.symbol;
+for(const k in cfgEls) cfgEls[k].value=cfg[k.replace(/_/g,'')];
+if(cfg.token) tokenInput.value=cfg.token;
+
+function updateCfgFromUI(){
+  cfg.token=tokenInput.value.trim();
+  cfg.symbol=symbolSelect.value;
+  cfg.long_threshold=Number(cfgEls.long_threshold.value);
+  cfg.short_threshold=Number(cfgEls.short_threshold.value);
+  cfg.stake_pct=Number(cfgEls.stake_pct.value);
+  cfg.loss_cap=Number(cfgEls.loss_cap.value);
+  cfg.trade_cap=Number(cfgEls.trade_cap.value);
+  cfg.loss_streak_cap=Number(cfgEls.loss_streak_cap.value);
+  saveCfg(cfg);
+}
+
+for(const el of [tokenInput,symbolSelect,...Object.values(cfgEls)]) el.addEventListener('change',updateCfgFromUI);
+resetBtn.onclick=()=>{localStorage.removeItem(STORAGE_KEY);location.reload();};
+
+// metrics state
+let equity=0;
+let dailyStats={loss:0,trades:0,consecLoss:0,win:0,lossCnt:0,pnl:0};
+const mutex=new Mutex();
+let paused=false;
+
+// chart setup
+const chart=new Chart(chartCtx,{type:'line',data:{labels:[],datasets:[{label:'Ticks',data:[],borderColor:'#4ade80',borderWidth:1,pointRadius:0}]},options:{scales:{x:{display:false},y:{display:true}}}});
+
+let ws=null; let wsAttempt=0; let lastMsg=Date.now(); let heartbeatTimer=null; let symbolSub=null; let ticks=[]; let candles=[]; let atrSeries=[]; let tradeHistory=[]; let weights={ema:20,rsi:20,macd:20,atr:20,pattern:20};
+
+function connect(){
+  const appId = window.DERIV_APP_ID || 86030;
+  const url=`wss://ws.derivws.com/websockets/v3?app_id=${appId}`;
+  ws=new WebSocket(url);
+  statusEl.textContent='CONNECTING';
+  ws.onopen=()=>{wsAttempt=0;statusEl.textContent='AUTH';authorize();};
+  ws.onmessage=ev=>{lastMsg=Date.now();handleMsg(JSON.parse(ev.data));};
+  ws.onclose=()=>{statusEl.textContent='DISCONNECTED';scheduleReconnect();};
+  ws.onerror=()=>{statusEl.textContent='ERROR';ws.close();};
+  heartbeatTimer=setInterval(()=>{if(Date.now()-lastMsg>15000){try{ws.send(JSON.stringify({ping:1}));}catch{ws.close();}}},1000);
+}
+function scheduleReconnect(){clearInterval(heartbeatTimer);const t=calcBackoff(wsAttempt++);setTimeout(connect,t);}
+function authorize(){if(cfg.token)ws.send(JSON.stringify({authorize:cfg.token}));else{paused=true;log('No token set');}}
+
+function subscribeTicks(){if(symbolSub)ws.send(JSON.stringify({forget: symbolSub}));ws.send(JSON.stringify({ticks: cfg.symbol,subscribe:1}));}
+
+function handleMsg(data){if(data.msg_type==='authorize'){balanceEl.textContent=data.authorize.balance+' '+data.authorize.currency;equity=data.authorize.balance;subscribeTicks();}
+else if(data.msg_type==='tick'){processTick(data.tick);} else if(data.msg_type==='ping'){log('pong');} else if(data.error){log('Error '+data.error.message);}}
+
+function processTick(t){pushTick(t);updateIndicators();}
+
+function pushTick(t){ticks.push({time:t.epoch*1000,price:parseFloat(t.quote)});if(ticks.length>500)ticks.shift();chart.data.labels=ticks.slice(-200).map(x=>new Date(x.time).toLocaleTimeString());chart.data.datasets[0].data=ticks.slice(-200).map(x=>x.price);chart.update();if(ticks.length>=1){const last=ticks[ticks.length-1];const candle={open:last.price,high:last.price,low:last.price,close:last.price};candles.push(candle);if(candles.length>500)candles.shift();}}
+
+function updateIndicators(){const closes=ticks.map(t=>t.price);const ema20=EMA(20,closes);const ema50=EMA(50,closes);const rsi=RSI(closes);const {macd,signal}=MACD(closes);const atr=ATR(candles);atrSeries.push(atr);if(atrSeries.length>20)atrSeries.shift();const atrMedian=[...atrSeries].sort((a,b)=>a-b)[Math.floor(atrSeries.length/2)]||0;const len=candles.length;let bull=false,bear=false;if(len>=2){bull=isBullishEngulfing(candles[len-2],candles[len-1]);bear=isBearishEngulfing(candles[len-2],candles[len-1]);}
+  const signals={
+    ema: ema20>ema50,
+    rsi: rsi>=45 && rsi<=70,
+    macd: macd>signal,
+    atr: atr>atrMedian,
+    pattern: bull
+  };
+  const shortSignals={
+    ema: ema20<ema50,
+    rsi: rsi<=55 && rsi>=30,
+    macd: macd<signal,
+    atr: atr>atrMedian,
+    pattern: bear
+  };
+  const scoreLong = Object.keys(signals).reduce((a,k)=>a+(signals[k]?weights[k]:0),0);
+  const scoreShort= Object.keys(shortSignals).reduce((a,k)=>a+(shortSignals[k]?weights[k]:0),0);
+  scoreEl.textContent=Math.max(scoreLong,scoreShort).toFixed(1);
+  if(!paused){
+    if(scoreLong>=cfg.long_threshold) attemptTrade('LONG');
+    else if(scoreShort>=cfg.short_threshold) attemptTrade('SHORT');
+  }
+}
+
+async function attemptTrade(dir){updateCfgFromUI();const check=riskCheck({equity,daily_loss:dailyStats.loss,daily_trades:dailyStats.trades,consec_losses:dailyStats.consecLoss},{stake_pct_of_equity:cfg.stake_pct,daily_loss_cap:cfg.loss_cap,daily_trade_cap:cfg.trade_cap,max_consecutive_losses:cfg.loss_streak_cap});if(!check.allowed){paused=true;log('Risk gate '+check.reason+'. Bot paused.');return;}
+  const stake=check.stake.toFixed(2);
+  const contract_type=dir==='LONG'?'RISE':'FALL';
+  const proposal={proposal:1,amount:stake,basis:'stake',contract_type,symbol:cfg.symbol,duration:5,duration_unit:'t'};
+  await mutex.run(async()=>{ws.send(JSON.stringify(proposal));const prop=await waitFor('proposal');ws.send(JSON.stringify({buy:prop.proposal.id,price:prop.proposal.ask_price}));const buy=await waitFor('buy');log('Bought '+dir+' for '+stake);const poc={proposal_open_contract:1,contract_id:buy.buy.contract_id,subscribe:1};ws.send(JSON.stringify(poc));const res=await waitFor('proposal_open_contract',c=>c.proposal_open_contract.is_sold);const pnl=parseFloat(res.proposal_open_contract.profit);equity+=pnl;balanceEl.textContent=equity.toFixed(2);dailyStats.trades++;dailyStats.pnl+=pnl; if(pnl>0){dailyStats.win++;dailyStats.consecLoss=0;}else{dailyStats.loss+=-pnl;dailyStats.lossCnt++;dailyStats.consecLoss++;}
+  log('Closed P/L '+pnl.toFixed(2));updateMetrics();updateWeights(pnl>0);});
+}
+
+function waitFor(type,filter){return new Promise((resolve)=>{const fn=ev=>{const d=JSON.parse(ev.data);if(d.msg_type===type && (!filter||filter(d))){ws.removeEventListener('message',fn);resolve(d);}};ws.addEventListener('message',fn);});}
+
+function updateMetrics(){metricsEl.innerHTML=`<div>Trades: ${dailyStats.trades}</div><div>Win %: ${(dailyStats.win/Math.max(1,dailyStats.trades)*100).toFixed(1)}</div><div>Streak: ${dailyStats.consecLoss}</div><div>Avg P/L: ${(dailyStats.pnl/Math.max(1,dailyStats.trades)).toFixed(2)}</div>`;}
+
+function updateWeights(win){tradeHistory.push({win,signals:weights});if(tradeHistory.length>200)tradeHistory.shift();if(tradeHistory.length%25===0){const last50=tradeHistory.slice(-50);const hits={ema:0,rsi:0,macd:0,atr:0,pattern:0};for(const t of last50){for(const k in hits) if(t.win) hits[k]+=1;}for(const k in hits){weights[k]=20*(hits[k]/last50.length)||0;}log('Updated weights '+JSON.stringify(weights));}}
+
+startBtn.onclick=()=>{paused=false;updateCfgFromUI();connect();};
+stopBtn.onclick=()=>{paused=true;ws?.close();};
+pauseBtn.onclick=()=>{paused=!paused;log(paused?'Paused':'Resumed');};
+
+updateMetrics();
 </script>
 </body>
 </html>
