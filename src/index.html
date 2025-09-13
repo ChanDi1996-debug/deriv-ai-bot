@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Deriv WS Auth — Minimal</title>
+<style>
+  :root{color-scheme:dark}
+  body{background:#0b1220;color:#e2e8f0;font-family:system-ui,Segoe UI,Inter,Roboto,sans-serif;margin:0;padding:24px}
+  label,input,button{font-size:14px}
+  input{width:380px;max-width:100%;padding:8px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0}
+  button{padding:8px 12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;cursor:pointer}
+  #log{white-space:pre-wrap;font-family:ui-monospace,Consolas,Menlo,monospace;font-size:12px;margin-top:16px;background:#0f172a;border:1px solid #334155;border-radius:12px;padding:12px;min-height:160px}
+</style>
+</head>
+<body>
+<h1>Deriv WebSocket — Quick Auth</h1>
+<p>Enter your <b>App ID</b> and <b>Token</b>. Nothing is stored.</p>
+<div>
+  <label>App ID<br><input id="appId" placeholder="e.g., 1089"/></label>
+</div>
+<div style="margin-top:8px">
+  <label>Token<br><input id="token" placeholder="Paste your Deriv API token"/></label>
+</div>
+<div style="margin-top:12px">
+  <button id="connectBtn">Connect & Authorize</button>
+</div>
+<pre id="log"></pre>
+<script>
+const log = (m)=>{ const el=document.getElementById('log'); el.textContent += `[${new Date().toLocaleTimeString()}] ${m}\n`; el.scrollTop=el.scrollHeight; };
+
+document.getElementById('connectBtn').onclick = async () => {
+  const appId = document.getElementById('appId').value.trim();
+  const token = document.getElementById('token').value.trim();
+  if(!appId || !token){ log('Enter App ID and Token.'); return; }
+  const url = `wss://ws.derivws.com/websockets/v3?app_id=${encodeURIComponent(appId)}`;
+  log(`Connecting → ${url}`);
+  const ws = new WebSocket(url);
+  ws.onopen = () => {
+    log('WS connected. Authorizing...');
+    ws.send(JSON.stringify({authorize: token}));
+  };
+  ws.onmessage = (ev) => {
+    const data = JSON.parse(ev.data);
+    if(data.msg_type === 'authorize'){
+      log(`Authorized: ${data.authorize.loginid} | Balance: ${data.authorize.balance} ${data.authorize.currency}`);
+    }else if(data.error){
+      log('Error: '+data.error.message);
+    }else{
+      log('Message: '+data.msg_type);
+    }
+  };
+  ws.onerror = () => log('WS error');
+  ws.onclose = () => log('WS closed');
+};
+</script>
+</body>
+</html>

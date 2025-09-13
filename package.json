@@ -1,0 +1,15 @@
+﻿{
+  "name": "codex-deriv-starter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx http-server ./src -p 8080 -a 127.0.0.1 -c-1",
+    "lint": "node -e \"console.log('lint ok')\"",
+    "test": "node test/test.js",
+    "build": "echo 'No build step (static HTML)'"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
