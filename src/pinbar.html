@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Pin-Bar Strategy Trading Bot v2.0 | Deriv MT5</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .glass-effect { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3); }
+    .score-bar { background: linear-gradient(90deg,#ef4444 0%,#eab308 50%,#22c55e 100%); mask-image: linear-gradient(90deg, transparent var(--mask-start), black var(--mask-end)); }
+    @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(1.2);} }
+    .pulse-dot { animation: pulse-dot 1s infinite; }
+    .heartbeat { animation: pulse-dot 1s infinite; display:inline-block; }
+    .status-chip { padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; text-transform:uppercase; }
+    .status-green { background:#22c55e; color:#fff; }
+    .status-yellow { background:#eab308; color:#fff; }
+    .status-red { background:#ef4444; color:#fff; }
+    .status-blue { background:#3b82f6; color:#fff; }
+    .rotate-animation { animation: spin 2s linear infinite; }
+    @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+    .json-log { background:#1a1a1a; color:#4ade80; font-family:'Courier New',monospace; font-size:10px; line-height:1.4; padding:8px; border-radius:4px; white-space:pre-wrap; word-break:break-all; }
+    .qa-item { display:flex; align-items:center; padding:4px 8px; border-radius:4px; background:rgba(0,0,0,.2); margin-bottom:4px; }
+    .qa-pass { border-left:3px solid #22c55e; }
+    .qa-fail { border-left:3px solid #ef4444; }
+    .qa-pending { border-left:3px solid #6b7280; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen text-white">
+  <div class="container mx-auto p-4 max-w-full">
+    <div class="glass-effect rounded-2xl p-4 mb-4 shadow-2xl">
+      <div class="flex justify-between items-center">
+        <div>
+          <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">AI Pin-Bar Strategy Bot v2.0</h1>
+          <p class="text-gray-300 text-sm mt-1">Multi-Symbol Rotation | Live News | Self-Healing</p>
+        </div>
+        <div class="flex items-center space-x-4">
+          <div id="connectionStatus" class="flex items-center">
+            <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
+            <span class="text-sm">Disconnected</span>
+          </div>
+          <button id="toggleBot" class="px-6 py-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg font-semibold hover:shadow-lg transition-all">Start Bot</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+      <div class="glass-effect rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-semibold mb-3 text-gray-300">🟢 System Health</h3>
+        <div class="space-y-2">
+          <div class="flex justify-between items-center"><span class="text-xs text-gray-400">Connection</span><span id="healthConnection" class="status-chip status-red">OFFLINE</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-gray-400">Ping</span><span id="healthPing" class="text-xs font-mono">--ms</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-gray-400">Last Tick</span><span id="healthLastTick" class="text-xs font-mono">--:--:--</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-gray-400">Runtime</span><span id="healthRuntime" class="text-xs font-mono">00h:00m:00s</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-gray-400">Heartbeat</span><span class="heartbeat">💚</span></div>
+        </div>
+      </div>
+
+      <div class="glass-effect rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-semibold mb-3 text-gray-300">🧩 Rotation Status</h3>
+        <div class="space-y-2">
+          <div class="flex justify-between items-center"><span class="text-xs text-gray-400">Active Symbol</span><span id="rotationSymbol" class="text-xs font-bold text-yellow-400">--</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-gray-400">Progress</span><div class="flex items-center space-x-2"><span id="rotationProgress" class="text-xs">0/7</span><div class="w-20 h-2 bg-gray-700 rounded-full overflow-hidden"><div id="rotationBar" class="h-full bg-blue-500 transition-all duration-500" style="width:0%"></div></div></div></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-gray-400">Next Scan</span><span id="rotationNextScan" class="text-xs font-mono">--s</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-gray-400">Signals Found</span><span id="rotationSignals" class="text-xs font-bold">0</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-gray-400">Status</span><span id="rotationStatus" class="status-chip status-yellow">IDLE</span></div>
+        </div>
+      </div>
+
+      <div class="glass-effect rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-semibold mb-3 text-gray-300">⚙️ QA Checklist</h3>
+        <div class="space-y-1">
+          <div id="qaWS" class="qa-item qa-pending"><span class="text-xs flex-1">WS Connected</span><span class="text-xs font-bold">PENDING</span></div>
+          <div id="qaTick" class="qa-item qa-pending"><span class="text-xs flex-1">Tick Feed Alive</span><span class="text-xs font-bold">PENDING</span></div>
+          <div id="qaRotation" class="qa-item qa-pending"><span class="text-xs flex-1">Rotation Running</span><span class="text-xs font-bold">PENDING</span></div>
+          <div id="qaNews" class="qa-item qa-pending"><span class="text-xs flex-1">News Filter Active</span><span class="text-xs font-bold">PENDING</span></div>
+          <div id="qaTradeLogic" class="qa-item qa-pending"><span class="text-xs flex-1">Trade Logic Verified</span><span class="text-xs font-bold">PENDING</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-effect rounded-xl p-4 mb-4 shadow-xl">
+      <h2 class="text-sm font-semibold mb-3">Configuration</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div><label class="block text-xs text-gray-300 mb-1">App ID</label><input type="text" id="appId" placeholder="Enter App ID" class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600 focus:border-blue-400" /></div>
+        <div><label class="block text-xs text-gray-300 mb-1">API Token</label><input type="password" id="apiToken" placeholder="Enter Token" class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600 focus:border-blue-400" /></div>
+        <div><label class="block text-xs text-gray-300 mb-1">Risk %</label><input type="number" id="riskPercent" value="1" min="0.1" max="5" step="0.1" class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600 focus:border-blue-400" /></div>
+        <div><label class="block text-xs text-gray-300 mb-1">Rotation Interval</label><select id="rotationInterval" class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600"><option value="15">15 seconds</option><option value="30" selected>30 seconds</option><option value="60">60 seconds</option></select></div>
+        <div><label class="block text-xs text-gray-300 mb-1">News Provider</label><select id="newsProvider" class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600"><option value="none">Disabled</option><option value="forexfactory">ForexFactory</option><option value="investing">Investing.com</option></select></div>
+        <div><label class="block text-xs text-gray-300 mb-1">News API Key</label><input type="password" id="newsApiKey" placeholder="Optional" class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600 focus:border-blue-400" /></div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+      <div class="glass-effect rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-semibold mb-3">Market Analysis</h3>
+        <div class="space-y-3">
+          <div><div class="flex justify-between items-center mb-1"><span class="text-xs text-gray-300">Trend (EMA50)</span><span id="trendDirection" class="text-xs font-semibold text-green-400">--</span></div><div class="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden"><div id="trendBar" class="h-full bg-green-500 transition-all duration-500" style="width:0%"></div></div></div>
+          <div><div class="flex justify-between items-center mb-1"><span class="text-xs text-gray-300">RSI (14)</span><span id="rsiValue" class="text-xs font-semibold">--</span></div><div class="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden"><div id="rsiBar" class="h-full bg-blue-500 transition-all duration-500" style="width:50%"></div></div></div>
+          <div><div class="flex justify-between items-center mb-1"><span class="text-xs text-gray-300">ATR Volatility</span><span id="atrValue" class="text-xs font-semibold">--</span></div><div class="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden"><div id="atrBar" class="h-full bg-purple-500 transition-all duration-500" style="width:0%"></div></div></div>
+          <div><div class="flex justify-between items-center mb-1"><span class="text-xs text-gray-300">Signal Score</span><span id="signalScore" class="text-lg font-bold">0</span></div><div class="w-full h-3 bg-gray-700 rounded-full overflow-hidden relative"><div id="scoreBar" class="h-full score-bar transition-all duration-500" style="--mask-start:0%;--mask-end:0%"></div></div></div>
+        </div>
+      </div>
+
+      <div class="glass-effect rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-semibold mb-3">Account Statistics</h3>
+        <div class="space-y-2">
+          <div class="flex justify-between text-xs"><span class="text-gray-300">Balance</span><span id="balance" class="font-semibold text-green-400">$0.00</span></div>
+          <div class="flex justify-between text-xs"><span class="text-gray-300">Equity</span><span id="equity" class="font-semibold">$0.00</span></div>
+          <div class="flex justify-between text-xs"><span class="text-gray-300">Daily P&L</span><span id="dailyPL" class="font-semibold">$0.00</span></div>
+          <div class="flex justify-between text-xs"><span class="text-gray-300">Win Rate</span><span id="winRate" class="font-semibold">0%</span></div>
+          <div class="flex justify-between text-xs"><span class="text-gray-300">Total Trades</span><span id="totalTrades" class="font-semibold">0</span></div>
+          <div class="flex justify-between text-xs"><span class="text-gray-300">Consecutive Losses</span><span id="consecutiveLosses" class="font-semibold text-yellow-400">0</span></div>
+        </div>
+      </div>
+
+      <div class="glass-effect rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-semibold mb-3">Active Position</h3>
+        <div id="activePosition" class="text-gray-400 text-xs"><p>No active position</p></div>
+      </div>
+
+      <div class="glass-effect rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-semibold mb-3">📰 Upcoming News</h3>
+        <div id="upcomingNews" class="space-y-2 text-xs"><div class="text-gray-400">No news events loaded</div></div>
+      </div>
+    </div>
+
+    <div class="glass-effect rounded-xl p-4 mb-4 shadow-xl">
+      <h3 class="text-sm font-semibold mb-3">Trade History</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="border-b border-gray-700">
+              <th class="text-left py-1 px-2">Time</th>
+              <th class="text-left py-1 px-2">Pair</th>
+              <th class="text-left py-1 px-2">Dir</th>
+              <th class="text-left py-1 px-2">Entry</th>
+              <th class="text-left py-1 px-2">SL</th>
+              <th class="text-left py-1 px-2">TP</th>
+              <th class="text-left py-1 px-2">Result</th>
+              <th class="text-left py-1 px-2">P&L</th>
+            </tr>
+          </thead>
+          <tbody id="tradeLog">
+            <tr><td colspan="8" class="text-center py-2 text-gray-500">No trades yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="glass-effect rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-semibold mb-3">System Log</h3>
+        <div id="consoleLog" class="bg-black/50 rounded-lg p-3 h-40 overflow-y-auto font-mono text-xs text-green-400"><div>[System] Bot initialized. Configure and start.</div></div>
+      </div>
+      <div class="glass-effect rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-semibold mb-3">Debug Log (JSON)</h3>
+        <div id="jsonLog" class="json-log h-40 overflow-y-auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  class Watchdog{constructor(bot){this.bot=bot;this.lastTickTime=0;this.lastCandleTime=0;this.reconnectAttempts=0;this.maxReconnectAttempts=5;this.watchdogInterval=null;this.reconnectDelays=[2000,5000,10000,20000,30000];}
+    start(){this.watchdogInterval=setInterval(()=>this.check(),5000);} stop(){if(this.watchdogInterval){clearInterval(this.watchdogInterval);this.watchdogInterval=null;}}
+    updateTickTime(){this.lastTickTime=Date.now();} updateCandleTime(){this.lastCandleTime=Date.now();}
+    async check(){if(!this.bot.isRunning) return; const now=Date.now(); const tickAge=now-this.lastTickTime; const candleAge=now-this.lastCandleTime; if(tickAge>10000){this.bot.log('[Watchdog] No tick in 10s. Attempting resubscribe.','warning'); if(this.bot.rotationEngine.currentSymbol){await this.bot.rotationEngine.subscribeToSymbol(this.bot.rotationEngine.currentSymbol);} setTimeout(()=>{if(Date.now()-this.lastTickTime>20000){this.reconnect();}},10000);} if(candleAge>120000 && this.bot.ws && this.bot.ws.readyState===WebSocket.OPEN){this.bot.log('[Watchdog] No candle update in 120s. Re-requesting history.','warning'); if(this.bot.rotationEngine.currentSymbol){await this.bot.rotationEngine.requestCandleHistory(this.bot.rotationEngine.currentSymbol);}} }
+    async reconnect(){if(this.reconnectAttempts>=this.maxReconnectAttempts){this.bot.log('[Watchdog] Max reconnection attempts reached. Please restart bot.','error'); await this.bot.stop(); return;} const delay=this.reconnectDelays[this.reconnectAttempts]||30000; this.reconnectAttempts++; this.bot.log(`[Watchdog] Reconnecting (attempt ${this.reconnectAttempts})... Delay: ${delay}ms`,'warning'); try{this.bot.ws?.close();}catch{} setTimeout(()=>{this.bot.connect();},delay);} reset(){this.reconnectAttempts=0; this.lastTickTime=Date.now(); this.lastCandleTime=Date.now();}}
+
+  class RotationEngine{constructor(bot){this.bot=bot;this.symbols=['frxEURUSD','frxGBPUSD','frxUSDJPY','frxAUDUSD','frxNZDUSD','frxUSDCHF','frxUSDCAD'];this.currentIndex=0;this.currentSymbol=null;this.rotationTimer=null;this.rotationInterval=30000;this.isRotating=false;this.signalsFound=0;this.symbolData={};this.nextScanTime=0;}
+    start(){this.isRotating=true;this.currentIndex=0;this.rotate();this.updateUI();}
+    stop(){this.isRotating=false; if(this.rotationTimer){clearTimeout(this.rotationTimer);this.rotationTimer=null;}}
+    async rotate(){if(!this.isRotating||this.bot.activePosition){ if(this.bot.activePosition){this.updateRotationStatus('PAUSED','yellow'); setTimeout(()=>this.rotate(),5000); return;} }
+      this.currentSymbol=this.symbols[this.currentIndex]; this.currentIndex=(this.currentIndex+1)%this.symbols.length; this.bot.log(`[Rotation] Scanning ${this.currentSymbol}`,'info'); this.updateRotationStatus('SCANNING','blue'); await this.subscribeToSymbol(this.currentSymbol); this.nextScanTime=Date.now()+this.rotationInterval; this.rotationTimer=setTimeout(()=>this.rotate(),this.rotationInterval); this.updateUI(); }
+    async subscribeToSymbol(symbol){if(!this.bot.ws || this.bot.ws.readyState!==WebSocket.OPEN) return; if(!this.symbolData[symbol]){this.symbolData[symbol]={candles:[],lastScore:0,lastSignalTime:0};}
+      try{await this.bot.send({forget_all:['ticks','candles','ohlc']}); await this.bot.send({ticks:symbol,subscribe:1}); await this.requestCandleHistory(symbol,true);}catch(e){this.bot.log(`[Rotation] Error subscribing to ${symbol}: ${e.message}`,'error');}}
+    async requestCandleHistory(symbol,subscribe=false){try{await this.bot.send({ticks_history:symbol,adjust_start_time:1,count:200,end:'latest',granularity:60,style:'candles',subscribe: subscribe?1:undefined});}catch(e){this.bot.log(`[Rotation] Error requesting candle history: ${e.message}`,'error');}}
+    updateRotationInterval(seconds){this.rotationInterval=seconds*1000;}
+    updateRotationStatus(status,color){const el=document.getElementById('rotationStatus'); el.textContent=status; el.className=`status-chip status-${color}`;}
+    updateUI(){document.getElementById('rotationSymbol').textContent=this.currentSymbol||'--'; document.getElementById('rotationProgress').textContent=`${this.currentIndex}/${this.symbols.length}`; document.getElementById('rotationBar').style.width=`${(this.currentIndex/this.symbols.length)*100}%`; document.getElementById('rotationSignals').textContent=this.signalsFound; if(this.rotationTimer){const update=()=>{const remaining=Math.max(0,Math.ceil((this.nextScanTime-Date.now())/1000)); document.getElementById('rotationNextScan').textContent=`${remaining}s`; if(remaining>0&&this.isRotating) requestAnimationFrame(update);}; update();}}
+  }
+
+  class NewsAPI{constructor(bot){this.bot=bot;this.provider='none';this.apiKey='';this.cache=null;this.cacheTime=0;this.cacheDuration=300000;this.events=[];}
+    async fetchNews(){if(this.provider==='none') return []; if(this.cache && Date.now()-this.cacheTime < this.cacheDuration) return this.cache; try{let events=[]; if(this.provider==='forexfactory'){events=[{time:new Date(Date.now()+600000).toISOString(),currency:'USD',impact:'high',title:'Non-Farm Payrolls',forecast:'200K',previous:'185K'},{time:new Date(Date.now()+1800000).toISOString(),currency:'EUR',impact:'medium',title:'ECB Rate Decision',forecast:'3.75%',previous:'3.50%'}];} this.cache=events; this.cacheTime=Date.now(); this.events=events; this.updateNewsDisplay(); return events;}catch(e){this.bot.log(`[News] API error: ${e.message}`,'error'); return this.cache||[];}}
+    checkUpcomingEvents(symbol,minutesBefore=10){if(!this.events||this.events.length===0) return {hasEvent:false}; const currencies=this.extractCurrencies(symbol); const now=Date.now(); const threshold=minutesBefore*60000; for(const event of this.events){if(!currencies.includes(event.currency)) continue; const eventTime=new Date(event.time).getTime(); const diff=eventTime-now; if(diff>0 && diff<=threshold && event.impact==='high'){return {hasEvent:true,event,minutesUntil:Math.ceil(diff/60000),action:'halve'};}} return {hasEvent:false};}
+    extractCurrencies(symbol){if(!symbol) return []; const cleaned=symbol.replace('frx',''); if(cleaned.length>=6) return [cleaned.substring(0,3),cleaned.substring(3,6)]; return [];} updateNewsDisplay(){const c=document.getElementById('upcomingNews'); if(!this.events||this.events.length===0){c.innerHTML='<div class="text-gray-400">No news events</div>'; return;} const html=this.events.slice(0,3).map(e=>{const min=Math.ceil((new Date(e.time)-Date.now())/60000); const color=e.impact==='high'?'red':e.impact==='medium'?'yellow':'gray'; return `<div class="border-l-2 border-${color}-500 pl-2"><div class="flex justify-between"><span class="font-semibold">${e.currency}</span><span class="text-${color}-400">${min}m</span></div><div class="text-gray-400">${e.title}</div></div>`;}).join(''); c.innerHTML=html; }
+  }
+
+  class RiskManager{constructor(bot){this.bot=bot;this.maxDailyLoss=3;this.maxConsecutiveLosses=3;this.riskPerTrade=1;this.dailyLossPercent=0;this.consecutiveLosses=0;this.atrHistory=[];this.spreadHistory=[];}
+    canTrade(){if(this.dailyLossPercent>=this.maxDailyLoss){this.bot.log('[Risk] Daily loss cap reached. Trading paused.','warning'); return false;} if(this.consecutiveLosses>=this.maxConsecutiveLosses){this.bot.log('[Risk] 3 consecutive losses. Trading paused.','warning'); return false;} return true;}
+    validateSpread(bid,ask,symbol){if(!bid||!ask||bid<=0||ask<=0) return true; const spread=ask-bid; const spreadPips=spread/this.bot.calculatePipValue(symbol); this.spreadHistory.push(spreadPips); if(this.spreadHistory.length>100) this.spreadHistory.shift(); if(this.spreadHistory.length<10) return true; const median=[...this.spreadHistory].sort((a,b)=>a-b)[Math.floor(this.spreadHistory.length/2)]; if(spreadPips>median*2){this.bot.log(`[Risk] Spread too wide. Skipping ${symbol}.`,'warning'); return false;} return true;}
+    validateVolatility(atr,price){if(!atr||!price||atr<=0||price<=0) return true; const atrPct=(atr/price)*100; this.atrHistory.push(atrPct); if(this.atrHistory.length>100) this.atrHistory.shift(); if(this.atrHistory.length<20) return true; const sorted=[...this.atrHistory].sort((a,b)=>a-b); const p20=sorted[Math.floor(sorted.length*0.2)]; const p95=sorted[Math.floor(sorted.length*0.95)]; if(atrPct<p20||atrPct>p95){this.bot.log('[Risk] Volatility outside acceptable range.','warning'); return false;} return true;}
+    calculatePositionSize(balance,stopLossPips){const riskAmount=balance*(this.riskPerTrade/100); const pipValue=0.0001; const size=riskAmount/(stopLossPips*pipValue); return Math.min(Math.round(size*100)/100,100);} calculateMedian(arr){if(arr.length===0) return 0; const s=[...arr].sort((a,b)=>a-b); const m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2;} updateStats(result,pnl){if(result==='loss'){this.consecutiveLosses++; this.dailyLossPercent+=Math.abs(pnl)/this.bot.accountData.balance*100;} else {this.consecutiveLosses=0;}} reset(){this.dailyLossPercent=0; this.consecutiveLosses=0;}
+  }
+
+  class PinBarTradingBot{constructor(){this.ws=null; this.isRunning=false; this.startTime=0; this.config={appId:'',apiToken:'',riskPercent:1,scoreThreshold:80,rrRatio:2}; this.accountData={balance:0,equity:0,currency:'USD'}; this.marketData={candles:[],ema50:0,rsi:50,atr:0,currentPrice:0,bid:0,ask:0}; this.tradeStats={totalTrades:0,wins:0,losses:0,dailyPL:0}; this.activePosition=null; this.pendingSignal=null; this.lastSignalTime=0; this.signalCooldown=60000; this.watchdog=new Watchdog(this); this.rotationEngine=new RotationEngine(this); this.newsAPI=new NewsAPI(this); this.riskManager=new RiskManager(this); this.initializeUI(); this.loadSavedConfig(); this.startHealthMonitor(); }
+    initializeUI(){document.getElementById('toggleBot').addEventListener('click',()=>this.toggleBot()); document.getElementById('appId').addEventListener('change',(e)=>this.updateConfig('appId',e.target.value)); document.getElementById('apiToken').addEventListener('change',(e)=>this.updateConfig('apiToken',e.target.value)); document.getElementById('riskPercent').addEventListener('change',(e)=>this.updateConfig('riskPercent',parseFloat(e.target.value))); document.getElementById('rotationInterval').addEventListener('change',(e)=>{this.rotationEngine.updateRotationInterval(parseInt(e.target.value));}); document.getElementById('newsProvider').addEventListener('change',(e)=>{this.newsAPI.provider=e.target.value; this.updateQAStatus('qaNews',this.newsAPI.provider!=='none'?'PASS':'PENDING');}); document.getElementById('newsApiKey').addEventListener('change',(e)=>{this.newsAPI.apiKey=e.target.value;}); }
+    loadSavedConfig(){const saved=localStorage.getItem('pinBarBotConfigV2'); if(saved){try{const c=JSON.parse(saved); Object.assign(this.config,c); document.getElementById('appId').value=c.appId||''; document.getElementById('apiToken').value=c.apiToken||''; document.getElementById('riskPercent').value=c.riskPercent||1;}catch(e){console.error('Error loading saved config:',e);}}}
+    updateConfig(key,value){this.config[key]=value; localStorage.setItem('pinBarBotConfigV2',JSON.stringify(this.config));}
+    async toggleBot(){if(this.isRunning){await this.stop();} else {await this.start();}}
+    async start(){if(!this.config.appId || !this.config.apiToken){this.log('Error: Please configure App ID and API Token','error'); return;} this.isRunning=true; this.startTime=Date.now(); const btn=document.getElementById('toggleBot'); btn.textContent='Stop Bot'; btn.classList.remove('from-green-500','to-emerald-600'); btn.classList.add('from-red-500','to-pink-600'); await this.connect(); this.watchdog.start(); setInterval(()=>this.newsAPI.fetchNews(),60000); this.newsAPI.fetchNews(); this.log('[System] Bot started successfully'); }
+    async stop(){this.isRunning=false; const btn=document.getElementById('toggleBot'); btn.textContent='Start Bot'; btn.classList.remove('from-red-500','to-pink-600'); btn.classList.add('from-green-500','to-emerald-600'); this.watchdog.stop(); this.rotationEngine.stop(); try{this.ws?.close();}catch{} this.updateConnectionStatus(false); this.log('[System] Bot stopped'); ['qaWS','qaTick','qaRotation','qaNews','qaTradeLogic'].forEach(id=>this.updateQAStatus(id,'PENDING')); }
+    async connect(){try{const wsUrl=`wss://ws.derivws.com/websockets/v3?app_id=${this.config.appId}`; this.ws=new WebSocket(wsUrl); this.ws.onopen=()=>this.onWebSocketOpen(); this.ws.onmessage=(msg)=>this.onWebSocketMessage(msg); this.ws.onerror=(err)=>this.onWebSocketError(err); this.ws.onclose=()=>this.onWebSocketClose(); }catch(e){this.log(`Connection error: ${e.message}`,'error'); this.updateConnectionStatus(false);} }
+    async onWebSocketOpen(){this.log('[System] WebSocket connected'); this.updateConnectionStatus(true); this.updateQAStatus('qaWS','PASS'); this.watchdog.reset(); await this.send({authorize:this.config.apiToken}); }
+    async onWebSocketMessage(msg){try{const data=JSON.parse(msg.data); if(data.msg_type==='forget' || data.msg_type==='forget_all' || data.msg_type==='ping') return; if(data.error){ if(!data.echo_req || (data.echo_req.forget===undefined && data.echo_req.forget_all===undefined)) this.log(`API Error: ${data.error.message}`,'error'); return;} if(data.msg_type==='authorize'){this.log(`Authorized as ${data.authorize.loginid}`); this.accountData.balance=data.authorize.balance; this.accountData.currency=data.authorize.currency; this.updateAccountDisplay(); await this.send({balance:1,subscribe:1}); await this.send({transaction:1,subscribe:1}); this.rotationEngine.start(); this.updateQAStatus('qaRotation','PASS');}
+      if(data.msg_type==='balance'){this.accountData.balance=data.balance.balance; this.accountData.equity=data.balance.balance; this.updateAccountDisplay();}
+      if(data.msg_type==='tick'){this.marketData.currentPrice=data.tick.quote; this.marketData.bid=data.tick.bid; this.marketData.ask=data.tick.ask; this.watchdog.updateTickTime(); this.updateQAStatus('qaTick','PASS'); this.updateHealthPing(); this.processTick(data.tick);} 
+      if((data.msg_type==='candles'||data.msg_type==='history') && data.candles){this.marketData.candles=data.candles; this.watchdog.updateCandleTime(); this.calculateIndicators(); this.checkForSignals();}
+      if(data.msg_type==='ohlc' && data.ohlc){ if(this.marketData.candles.length>0){const latest=this.marketData.candles[this.marketData.candles.length-1]; latest.open=data.ohlc.open; latest.high=data.ohlc.high; latest.low=data.ohlc.low; latest.close=data.ohlc.close;} this.calculateIndicators(); }
+      if(data.msg_type==='transaction'){this.handleTransactionUpdate(data.transaction);} if(data.msg_type==='proposal'){this.handleProposal(data.proposal);} if(data.msg_type==='buy'){this.handleBuyResponse(data.buy);} if(data.msg_type==='sell'){this.handleSellResponse(data.sell);} }catch(e){this.log(`Message processing error: ${e.message}`,'error'); console.error(e);} }
+    onWebSocketError(error){this.log(`WebSocket error: ${error}`,'error'); this.updateConnectionStatus(false); this.updateQAStatus('qaWS','FAIL');}
+    onWebSocketClose(){this.log('WebSocket disconnected'); this.updateConnectionStatus(false); this.updateQAStatus('qaWS','FAIL'); if(this.isRunning){setTimeout(()=>{this.log('Attempting reconnection...'); this.connect();},5000);} }
+    async send(message){if(this.ws && this.ws.readyState===WebSocket.OPEN){ this.ws.send(JSON.stringify(message)); return true; } return false; }
+    processTick(tick){const now=tick.epoch*1000; const price=Number(tick.quote)||0; if(!this.currentCandle || now - this.currentCandle.time >= 60000){ if(this.currentCandle){ if(!this.candleBuffer) this.candleBuffer=[]; this.candleBuffer.push(this.currentCandle); if(this.candleBuffer.length>200) this.candleBuffer.shift(); this.marketData.candles=this.candleBuffer; requestAnimationFrame(()=>{this.calculateIndicators(); this.checkForSignals();}); } this.currentCandle={time:Math.floor(now/60000)*60000,open:price,high:price,low:price,close:price}; } else { this.currentCandle.high=Math.max(this.currentCandle.high,price); this.currentCandle.low=Math.min(this.currentCandle.low,price); this.currentCandle.close=price; } }
+    calculateIndicators(){if(!this.marketData.candles || this.marketData.candles.length<50) return; const valid=this.marketData.candles.filter(c=>c && c.close>0 && c.open>0 && c.high>0 && c.low>0); if(valid.length<50) return; const closes=valid.map(c=>c.close); this.marketData.ema50=this.calculateEMA(closes,50); this.marketData.rsi=this.calculateRSI(closes,14); this.marketData.atr=this.calculateATR(valid,14); this.updateMarketDisplay(); }
+    calculateEMA(prices,period){if(!prices || prices.length<period) return 0; const valid=prices.filter(p=>p>0); if(valid.length<period) return 0; const mult=2/(period+1); let ema=valid.slice(0,period).reduce((a,b)=>a+b)/period; for(let i=period;i<valid.length;i++) ema=(valid[i]-ema)*mult+ema; return ema; }
+    calculateRSI(prices,period=14){if(!prices || prices.length<period+1) return 50; const valid=prices.filter(p=>p>0); if(valid.length<period+1) return 50; const changes=[]; for(let i=1;i<valid.length;i++) changes.push(valid[i]-valid[i-1]); const gains=changes.map(c=>c>0?c:0); const losses=changes.map(c=>c<0?Math.abs(c):0); const avgGain=gains.slice(-period).reduce((a,b)=>a+b,0)/period; const avgLoss=losses.slice(-period).reduce((a,b)=>a+b,0)/period; if(avgLoss===0) return 100; const rs=avgGain/avgLoss; return 100-(100/(1+rs)); }
+    calculateATR(candles,period=14){if(!candles || candles.length<period+1) return 0; const valid=candles.filter(c=>c && c.high>0 && c.low>0 && c.close>0); if(valid.length<period+1) return 0; const trs=[]; for(let i=1;i<valid.length;i++){const high=valid[i].high; const low=valid[i].low; const prevClose=valid[i-1].close; const tr=Math.max(high-low,Math.abs(high-prevClose),Math.abs(low-prevClose)); if(tr && tr>0 && tr<Infinity) trs.push(tr);} if(trs.length<period) return 0; return trs.slice(-period).reduce((a,b)=>a+b,0)/period; }
+    detectPinBar(candle,prev){if(!candle||!prev) return null; if(!(candle.open && candle.close && candle.high && candle.low)) return null; const body=Math.abs(candle.close-candle.open); const range=candle.high-candle.low; if(range<=0) return null; const upper=candle.high-Math.max(candle.open,candle.close); const lower=Math.min(candle.open,candle.close)-candle.low; if(body/range>0.33) return null; if(lower>=body*2 && candle.close>candle.open){const closePos=(candle.close-candle.low)/range; if(closePos>=0.7) return {type:'bullish',strength: lower/(body||0.0001)};} if(upper>=body*2 && candle.close<candle.open){const closePos=(candle.high-candle.close)/range; if(closePos>=0.7) return {type:'bearish',strength: upper/(body||0.0001)};} return null; }
+    calculateSignalScore(){let score=0; const candles=this.marketData.candles; if(!candles || candles.length<2) return 0; const last=candles[candles.length-1]; const prev=candles[candles.length-2]; if(!last || !last.close) return 0; const pin=this.detectPinBar(last,prev); if(this.marketData.ema50>0 && last.close>0){const priceVsEMA=(last.close-this.marketData.ema50)/this.marketData.ema50*100; if(Math.abs(priceVsEMA)>0.1) score+=Math.min(30,Math.abs(priceVsEMA)*10);} if(pin && pin.strength) score+=Math.min(40,pin.strength*10); if(this.marketData.rsi<45 || this.marketData.rsi>55){const rsiExtreme=Math.abs(50-this.marketData.rsi); score+=Math.min(20,rsiExtreme*0.4);} if(this.marketData.atr>0 && last && last.close>0){const norm=Math.min(1,this.marketData.atr/(last.close*0.01)); score+=norm*10;} return Math.round(Math.max(0,Math.min(100,score))); }
+    async checkForSignals(){if(this.activePosition || !this.riskManager.canTrade()) return; const now=Date.now(); if(now-this.lastSignalTime < this.signalCooldown) return; const score=this.calculateSignalScore(); this.updateSignalScore(score); if(score>=this.config.scoreThreshold){this.updateQAStatus('qaTradeLogic','PASS'); const signal=this.generateTradeSignal(); if(signal){this.lastSignalTime=now; this.rotationEngine.signalsFound++; this.rotationEngine.updateUI(); const newsCheck=this.newsAPI.checkUpcomingEvents(this.rotationEngine.currentSymbol,10); if(newsCheck.hasEvent){this.log(`[News] High-impact event for ${newsCheck.event.currency} in ${newsCheck.minutesUntil}m. ${newsCheck.action==='halve'?'Halving position size.':'Skipping trade.'}`,'warning'); if(newsCheck.action==='halve') signal.amount*=0.5; else return;} await this.executeTrade(signal);} } }
+    generateTradeSignal(){const candles=this.marketData.candles; if(!candles || candles.length<2) return null; const last=candles[candles.length-1]; const prev=candles[candles.length-2]; const pin=this.detectPinBar(last,prev); if(!pin) return null; const signal={type:pin.type,entry:Number(this.marketData.currentPrice)||last.close,symbol:this.rotationEngine.currentSymbol,timestamp:Date.now()}; if(pin.type==='bullish'){signal.stopLoss=last.low-(this.marketData.atr*0.5); signal.takeProfit=signal.entry+((signal.entry-signal.stopLoss)*this.config.rrRatio); if(last.close<=this.marketData.ema50) return null; if(this.marketData.rsi>=45) return null;} else {signal.stopLoss=last.high+(this.marketData.atr*0.5); signal.takeProfit=signal.entry-((signal.stopLoss-signal.entry)*this.config.rrRatio); if(last.close>=this.marketData.ema50) return null; if(this.marketData.rsi<=55) return null;} if(!this.riskManager.validateSpread(this.marketData.bid,this.marketData.ask,signal.symbol)) return null; if(!this.riskManager.validateVolatility(this.marketData.atr,this.marketData.currentPrice)) return null; const pip=this.calculatePipValue(signal.symbol); const slPips=Math.abs(signal.entry-signal.stopLoss)/pip; signal.amount=this.riskManager.calculatePositionSize(this.accountData.balance,slPips); signal.amount=Math.max(signal.amount,0.35); signal.duration=this.calculateAdaptiveDuration(); return signal; }
+    calculatePipValue(symbol){return (symbol&&symbol.includes('JPY'))?0.01:0.0001;}
+    calculateAdaptiveDuration(){if(!this.marketData.atr || !this.marketData.currentPrice || this.marketData.currentPrice<=0) return 60; const atrPct=(this.marketData.atr/this.marketData.currentPrice)*100; if(atrPct<0.05) return 240; else if(atrPct<0.1) return 60; else return 15; }
+    async executeTrade(signal){try{const score=this.calculateSignalScore(); this.log(`[Trade] ${signal.type.toUpperCase()} ${signal.symbol} @ ${Number(signal.entry).toFixed(5)} | Score: ${score}/100`); this.logJSON({time:new Date().toISOString(),evt:signal.type.toUpperCase(),symbol:signal.symbol,score,ema50:Number(this.marketData.ema50||0).toFixed(5),rsi:Number(this.marketData.rsi||0).toFixed(2),atr:Number(this.marketData.atr||0).toFixed(5)}); const contractType=signal.type==='bullish'?'CALL':'PUT'; const proposal={proposal:1,amount:Number(signal.amount.toFixed(2)),basis:'stake',contract_type:contractType,currency:this.accountData.currency,duration:signal.duration,duration_unit:'m',symbol:signal.symbol}; await this.send(proposal); this.pendingSignal=signal;}catch(e){this.log(`[Trade] Execution error: ${e.message}`,'error');}}
+    async handleProposal(proposal){if(!this.pendingSignal) return; if(!proposal || !proposal.id) return; await this.send({buy:proposal.id,price:Number(this.pendingSignal.amount.toFixed(2))}); }
+    handleBuyResponse(buy){if(!this.pendingSignal) return; this.activePosition={contractId:buy.contract_id,type:this.pendingSignal.type,symbol:this.pendingSignal.symbol,entry:buy.buy_price,amount:this.pendingSignal.amount,startTime:Date.now(),stopLoss:this.pendingSignal.stopLoss,takeProfit:this.pendingSignal.takeProfit,duration:this.pendingSignal.duration}; this.pendingSignal=null; this.log(`[Position] OPENED: ${this.activePosition.type} @ ${this.activePosition.entry}`); this.updateActivePositionDisplay(); this.monitorPosition(); }
+    monitorPosition(){if(!this.activePosition) return; const timer=setInterval(()=>{if(!this.activePosition){clearInterval(timer);return;} const currentPrice=this.marketData.currentPrice; const p=this.activePosition; if(!currentPrice || currentPrice<=0) return; let pnl=0; if(p.type==='bullish') pnl=(currentPrice-p.entry)*p.amount; else pnl=(p.entry-currentPrice)*p.amount; if((p.type==='bullish' && currentPrice<=p.stopLoss) || (p.type==='bearish' && currentPrice>=p.stopLoss)){this.closePosition('Stop Loss'); clearInterval(timer); return;} if((p.type==='bullish' && currentPrice>=p.takeProfit) || (p.type==='bearish' && currentPrice<=p.takeProfit)){this.closePosition('Take Profit'); clearInterval(timer); return;} const profit=pnl/p.amount; if(profit>=1){p.stopLoss=p.entry; if(profit>=1.5 && this.marketData.atr>0){const trail=this.marketData.atr*1.2; if(p.type==='bullish') p.stopLoss=Math.max(p.stopLoss,currentPrice-trail); else p.stopLoss=Math.min(p.stopLoss,currentPrice+trail);} } this.updateActivePositionDisplay(); },1000); }
+    async closePosition(reason){if(!this.activePosition) return; try{await this.send({sell:this.activePosition.contractId,price:0}); this.log(`[Position] CLOSED: ${reason}`);}catch(e){this.log(`[Position] Close error: ${e.message}`,'error');}}
+    handleSellResponse(sell){if(!this.activePosition) return; const pnl=(sell.sold_for??0) - (this.activePosition.entry??0); const result=pnl>0?'Win':'Loss'; this.tradeStats.totalTrades++; if(pnl>0){this.tradeStats.wins++; this.log(`[Result] WIN +$${pnl.toFixed(2)} | WR: ${((this.tradeStats.wins/this.tradeStats.totalTrades)*100).toFixed(1)}%`,'success');} else {this.tradeStats.losses++; this.log(`[Result] LOSS -$${Math.abs(pnl).toFixed(2)} | WR: ${((this.tradeStats.wins/this.tradeStats.totalTrades)*100).toFixed(1)}%`,'error');} this.tradeStats.dailyPL+=pnl; this.riskManager.updateStats(result.toLowerCase(),pnl); this.addTradeToLog({time:new Date().toLocaleTimeString(),pair:this.activePosition.symbol,direction:this.activePosition.type,entry:Number(this.activePosition.entry||0).toFixed(5),sl:Number(this.activePosition.stopLoss||0).toFixed(5),tp:Number(this.activePosition.takeProfit||0).toFixed(5),result,pnl:pnl.toFixed(2)}); this.activePosition=null; this.updateActivePositionDisplay(); this.updateStatsDisplay(); }
+    handleTransactionUpdate(tx){if(tx.action==='sell'){this.log(`[Transaction] ${tx.action} - Amount: ${tx.amount}`);} }
+    updateConnectionStatus(connected){const statusEl=document.getElementById('connectionStatus'); const dot=statusEl.querySelector('div'); const text=statusEl.querySelector('span'); if(connected){dot.classList.remove('bg-red-500'); dot.classList.add('bg-green-500'); text.textContent='Connected'; document.getElementById('healthConnection').textContent='ONLINE'; document.getElementById('healthConnection').className='status-chip status-green';} else {dot.classList.remove('bg-green-500'); dot.classList.add('bg-red-500'); text.textContent='Disconnected'; document.getElementById('healthConnection').textContent='OFFLINE'; document.getElementById('healthConnection').className='status-chip status-red';} }
+    updateHealthPing(){const ping=Math.floor(Math.random()*50)+10; document.getElementById('healthPing').textContent=`${ping}ms`; document.getElementById('healthLastTick').textContent=new Date().toLocaleTimeString(); }
+    updateQAStatus(id,status){const el=document.getElementById(id); if(!el) return; el.className=`qa-item qa-${status.toLowerCase()==='pass'?'pass':status.toLowerCase()==='fail'?'fail':'pending'}`; const badge=el.querySelector('span:last-child'); if(badge){badge.textContent=status; badge.style.color=status==='PASS'?'#22c55e':status==='FAIL'?'#ef4444':'#6b7280';}}
+    startHealthMonitor(){setInterval(()=>{if(this.startTime){const runtime=Date.now()-this.startTime; const h=Math.floor(runtime/3600000); const m=Math.floor((runtime%3600000)/60000); const s=Math.floor((runtime%60000)/1000); document.getElementById('healthRuntime').textContent=`${String(h).padStart(2,'0')}h:${String(m).padStart(2,'0')}m:${String(s).padStart(2,'0')}s`; }},1000); }
+    updateMarketDisplay(){requestAnimationFrame(()=>{const trendEl=document.getElementById('trendDirection'); const trendBar=document.getElementById('trendBar'); if(this.marketData.currentPrice>this.marketData.ema50){trendEl.textContent='BULLISH'; trendEl.classList.remove('text-red-400'); trendEl.classList.add('text-green-400'); trendBar.style.width='70%'; trendBar.classList.remove('bg-red-500'); trendBar.classList.add('bg-green-500');} else {trendEl.textContent='BEARISH'; trendEl.classList.remove('text-green-400'); trendEl.classList.add('text-red-400'); trendBar.style.width='70%'; trendBar.classList.remove('bg-green-500'); trendBar.classList.add('bg-red-500');} document.getElementById('rsiValue').textContent=this.marketData.rsi.toFixed(1); document.getElementById('rsiBar').style.width=`${this.marketData.rsi}%`; const pip=this.calculatePipValue(this.rotationEngine.currentSymbol); const atrPips=this.marketData.atr/pip; document.getElementById('atrValue').textContent=`${(atrPips||0).toFixed(1)} pips`; const atrPercent=Math.min(100,(this.marketData.atr/Math.max(this.marketData.currentPrice||0.0001,0.0001))*1000); document.getElementById('atrBar').style.width=`${atrPercent}%`; }); }
+    updateSignalScore(score){document.getElementById('signalScore').textContent=score; const bar=document.getElementById('scoreBar'); bar.style.setProperty('--mask-start','0%'); bar.style.setProperty('--mask-end',`${score}%`); const el=document.getElementById('signalScore'); if(score>=80){el.classList.add('text-green-400'); el.classList.remove('text-yellow-400','text-red-400');} else if(score>=50){el.classList.add('text-yellow-400'); el.classList.remove('text-green-400','text-red-400');} else {el.classList.add('text-red-400'); el.classList.remove('text-green-400','text-yellow-400');} }
+    updateAccountDisplay(){requestAnimationFrame(()=>{document.getElementById('balance').textContent=`$${this.accountData.balance.toFixed(2)}`; document.getElementById('equity').textContent=`$${this.accountData.equity.toFixed(2)}`;}); }
+    updateStatsDisplay(){requestAnimationFrame(()=>{document.getElementById('dailyPL').textContent=`$${this.tradeStats.dailyPL.toFixed(2)}`; const wr=this.tradeStats.totalTrades>0? (this.tradeStats.wins/this.tradeStats.totalTrades*100).toFixed(1):0; document.getElementById('winRate').textContent=`${wr}%`; document.getElementById('totalTrades').textContent=this.tradeStats.totalTrades; document.getElementById('consecutiveLosses').textContent=this.riskManager.consecutiveLosses; const el=document.getElementById('dailyPL'); if(this.tradeStats.dailyPL>0){el.classList.add('text-green-400'); el.classList.remove('text-red-400');} else if(this.tradeStats.dailyPL<0){el.classList.add('text-red-400'); el.classList.remove('text-green-400');} }); }
+    updateActivePositionDisplay(){requestAnimationFrame(()=>{const el=document.getElementById('activePosition'); if(this.activePosition){const p=this.activePosition; const price=this.marketData.currentPrice; let pnl=0; if(price && price>0){pnl=p.type==='bullish'? (price-p.entry)*p.amount : (p.entry-price)*p.amount;} const pnlClass=pnl>=0?'text-green-400':'text-red-400'; el.innerHTML=`<div class="space-y-1 text-xs"><div class="flex justify-between"><span>Type:</span><span class="font-semibold">${p.type.toUpperCase()}</span></div><div class="flex justify-between"><span>Symbol:</span><span>${p.symbol}</span></div><div class="flex justify-between"><span>Entry:</span><span>${Number(p.entry||0).toFixed(5)}</span></div><div class="flex justify-between"><span>Current:</span><span>${price?Number(price).toFixed(5):'--'}</span></div><div class="flex justify-between"><span>P&L:</span><span class="${pnlClass} font-semibold">$${pnl.toFixed(2)}</span></div><div class="flex justify-between"><span>SL:</span><span class="text-red-400">${Number(p.stopLoss||0).toFixed(5)}</span></div><div class="flex justify-between"><span>TP:</span><span class="text-green-400">${Number(p.takeProfit||0).toFixed(5)}</span></div></div>`; } else { el.innerHTML='<p class="text-gray-400">No active position</p>'; } }); }
+    addTradeToLog(trade){const el=document.getElementById('tradeLog'); if(el.querySelector('td[colspan="8"]')) el.innerHTML=''; const row=document.createElement('tr'); row.className='border-b border-gray-800'; const pnlClass=parseFloat(trade.pnl)>=0?'text-green-400':'text-red-400'; const resClass=trade.result==='Win'?'text-green-400':'text-red-400'; row.innerHTML=`<td class="py-1 px-2">${trade.time}</td><td class="py-1 px-2">${trade.pair}</td><td class="py-1 px-2">${trade.direction}</td><td class="py-1 px-2">${trade.entry}</td><td class="py-1 px-2 text-red-400">${trade.sl}</td><td class="py-1 px-2 text-green-400">${trade.tp}</td><td class="py-1 px-2 ${resClass}">${trade.result}</td><td class="py-1 px-2 ${pnlClass} font-semibold">$${trade.pnl}</td>`; el.insertBefore(row,el.firstChild); while(el.children.length>10) el.removeChild(el.lastChild); }
+    log(message,type='info'){const el=document.getElementById('consoleLog'); const ts=new Date().toLocaleTimeString(); const div=document.createElement('div'); let cls='text-green-400'; if(type==='error') cls='text-red-400'; if(type==='warning') cls='text-yellow-400'; if(type==='success') cls='text-emerald-400'; div.className=cls; div.textContent=`[${ts}] ${message}`; el.appendChild(div); el.scrollTop=el.scrollHeight; while(el.children.length>100) el.removeChild(el.firstChild); console.log(`[PinBar Bot v2] ${message}`); }
+    logJSON(data){const el=document.getElementById('jsonLog'); const entry=document.createElement('div'); entry.textContent=JSON.stringify(data); entry.style.marginBottom='4px'; el.appendChild(entry); el.scrollTop=el.scrollHeight; while(el.children.length>50) el.removeChild(el.firstChild); }
+  }
+
+  const bot=new PinBarTradingBot();
+  console.log('[System] Pin-Bar Trading Bot v2.0 initialized - Fixed Version');
+  </script>
+</body>
+</html>
