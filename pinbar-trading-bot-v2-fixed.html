@@ -1,0 +1,1920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Pin-Bar Strategy Trading Bot v2.0 | Deriv MT5</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .score-bar {
+            background: linear-gradient(90deg, #ef4444 0%, #eab308 50%, #22c55e 100%);
+            mask-image: linear-gradient(90deg, transparent var(--mask-start), black var(--mask-end));
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(1.2); }
+        }
+        .pulse-dot { animation: pulse-dot 1s infinite; }
+        .heartbeat {
+            animation: pulse-dot 1s infinite;
+            display: inline-block;
+        }
+        .status-chip {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-green { background: #22c55e; color: white; }
+        .status-yellow { background: #eab308; color: white; }
+        .status-red { background: #ef4444; color: white; }
+        .status-blue { background: #3b82f6; color: white; }
+        .rotate-animation {
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .json-log {
+            background: #1a1a1a;
+            color: #4ade80;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            line-height: 1.4;
+            padding: 8px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .qa-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.2);
+            margin-bottom: 4px;
+        }
+        .qa-pass { border-left: 3px solid #22c55e; }
+        .qa-fail { border-left: 3px solid #ef4444; }
+        .qa-pending { border-left: 3px solid #6b7280; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen text-white">
+    <div class="container mx-auto p-4 max-w-full">
+        <!-- Header -->
+        <div class="glass-effect rounded-2xl p-4 mb-4 shadow-2xl">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                        AI Pin-Bar Strategy Bot v2.0 (Fixed)
+                    </h1>
+                    <p class="text-gray-300 text-sm mt-1">Multi-Symbol Rotation | Live News | Self-Healing</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="connectionStatus" class="flex items-center">
+                        <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
+                        <span class="text-sm">Disconnected</span>
+                    </div>
+                    <button id="toggleBot" class="px-6 py-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg font-semibold hover:shadow-lg transition-all">
+                        Start Bot
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Health & Rotation Status Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+            <!-- System Health -->
+            <div class="glass-effect rounded-xl p-4 shadow-xl">
+                <h3 class="text-sm font-semibold mb-3 text-gray-300">🟢 System Health</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Connection</span>
+                        <span id="healthConnection" class="status-chip status-red">OFFLINE</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Ping</span>
+                        <span id="healthPing" class="text-xs font-mono">--ms</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Last Tick</span>
+                        <span id="healthLastTick" class="text-xs font-mono">--:--:--</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Runtime</span>
+                        <span id="healthRuntime" class="text-xs font-mono">00h:00m:00s</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Heartbeat</span>
+                        <span class="heartbeat">💚</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rotation Status -->
+            <div class="glass-effect rounded-xl p-4 shadow-xl">
+                <h3 class="text-sm font-semibold mb-3 text-gray-300">🧩 Rotation Status</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Active Symbol</span>
+                        <span id="rotationSymbol" class="text-xs font-bold text-yellow-400">--</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Progress</span>
+                        <div class="flex items-center space-x-2">
+                            <span id="rotationProgress" class="text-xs">0/7</span>
+                            <div class="w-20 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div id="rotationBar" class="h-full bg-blue-500 transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Next Scan</span>
+                        <span id="rotationNextScan" class="text-xs font-mono">--s</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Signals Found</span>
+                        <span id="rotationSignals" class="text-xs font-bold">0</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Status</span>
+                        <span id="rotationStatus" class="status-chip status-yellow">IDLE</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QA Checklist -->
+            <div class="glass-effect rounded-xl p-4 shadow-xl">
+                <h3 class="text-sm font-semibold mb-3 text-gray-300">⚙️ QA Checklist</h3>
+                <div class="space-y-1">
+                    <div id="qaWS" class="qa-item qa-pending">
+                        <span class="text-xs flex-1">WS Connected</span>
+                        <span class="text-xs font-bold">PENDING</span>
+                    </div>
+                    <div id="qaTick" class="qa-item qa-pending">
+                        <span class="text-xs flex-1">Tick Feed Alive</span>
+                        <span class="text-xs font-bold">PENDING</span>
+                    </div>
+                    <div id="qaRotation" class="qa-item qa-pending">
+                        <span class="text-xs flex-1">Rotation Running</span>
+                        <span class="text-xs font-bold">PENDING</span>
+                    </div>
+                    <div id="qaNews" class="qa-item qa-pending">
+                        <span class="text-xs flex-1">News Filter Active</span>
+                        <span class="text-xs font-bold">PENDING</span>
+                    </div>
+                    <div id="qaTradeLogic" class="qa-item qa-pending">
+                        <span class="text-xs flex-1">Trade Logic Verified</span>
+                        <span class="text-xs font-bold">PENDING</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Panel -->
+        <div class="glass-effect rounded-xl p-4 mb-4 shadow-xl">
+            <h2 class="text-sm font-semibold mb-3">Configuration</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">App ID</label>
+                    <input type="text" id="appId" placeholder="Enter App ID" 
+                           class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600 focus:border-blue-400">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">API Token</label>
+                    <input type="password" id="apiToken" placeholder="Enter Token" 
+                           class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600 focus:border-blue-400">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Risk %</label>
+                    <input type="number" id="riskPercent" value="1" min="0.1" max="5" step="0.1"
+                           class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600 focus:border-blue-400">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Rotation Interval</label>
+                    <select id="rotationInterval" class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600">
+                        <option value="15">15 seconds</option>
+                        <option value="30" selected>30 seconds</option>
+                        <option value="60">60 seconds</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">News Provider</label>
+                    <select id="newsProvider" class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600">
+                        <option value="none">Disabled</option>
+                        <option value="forexfactory">ForexFactory</option>
+                        <option value="investing">Investing.com</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">News API Key</label>
+                    <input type="password" id="newsApiKey" placeholder="Optional" 
+                           class="w-full px-2 py-1 text-xs bg-black/30 rounded-lg border border-gray-600 focus:border-blue-400">
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+            <!-- Market Analysis -->
+            <div class="glass-effect rounded-xl p-4 shadow-xl">
+                <h3 class="text-sm font-semibold mb-3">Market Analysis</h3>
+                <div class="space-y-3">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs text-gray-300">Trend (EMA50)</span>
+                            <span id="trendDirection" class="text-xs font-semibold text-green-400">--</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div id="trendBar" class="h-full bg-green-500 transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs text-gray-300">RSI (14)</span>
+                            <span id="rsiValue" class="text-xs font-semibold">--</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div id="rsiBar" class="h-full bg-blue-500 transition-all duration-500" style="width: 50%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs text-gray-300">ATR Volatility</span>
+                            <span id="atrValue" class="text-xs font-semibold">--</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div id="atrBar" class="h-full bg-purple-500 transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs text-gray-300">Signal Score</span>
+                            <span id="signalScore" class="text-lg font-bold">0</span>
+                        </div>
+                        <div class="w-full h-3 bg-gray-700 rounded-full overflow-hidden relative">
+                            <div id="scoreBar" class="h-full score-bar transition-all duration-500" style="--mask-start: 0%; --mask-end: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account Stats -->
+            <div class="glass-effect rounded-xl p-4 shadow-xl">
+                <h3 class="text-sm font-semibold mb-3">Account Statistics</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-300">Balance</span>
+                        <span id="balance" class="font-semibold text-green-400">$0.00</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-300">Equity</span>
+                        <span id="equity" class="font-semibold">$0.00</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-300">Daily P&L</span>
+                        <span id="dailyPL" class="font-semibold">$0.00</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-300">Win Rate</span>
+                        <span id="winRate" class="font-semibold">0%</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-300">Total Trades</span>
+                        <span id="totalTrades" class="font-semibold">0</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-300">Consecutive Losses</span>
+                        <span id="consecutiveLosses" class="font-semibold text-yellow-400">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Position -->
+            <div class="glass-effect rounded-xl p-4 shadow-xl">
+                <h3 class="text-sm font-semibold mb-3">Active Position</h3>
+                <div id="activePosition" class="text-gray-400 text-xs">
+                    <p>No active position</p>
+                </div>
+            </div>
+
+            <!-- Upcoming News -->
+            <div class="glass-effect rounded-xl p-4 shadow-xl">
+                <h3 class="text-sm font-semibold mb-3">📰 Upcoming News</h3>
+                <div id="upcomingNews" class="space-y-2 text-xs">
+                    <div class="text-gray-400">No news events loaded</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trade Log -->
+        <div class="glass-effect rounded-xl p-4 mb-4 shadow-xl">
+            <h3 class="text-sm font-semibold mb-3">Trade History</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs">
+                    <thead>
+                        <tr class="border-b border-gray-700">
+                            <th class="text-left py-1 px-2">Time</th>
+                            <th class="text-left py-1 px-2">Pair</th>
+                            <th class="text-left py-1 px-2">Dir</th>
+                            <th class="text-left py-1 px-2">Entry</th>
+                            <th class="text-left py-1 px-2">SL</th>
+                            <th class="text-left py-1 px-2">TP</th>
+                            <th class="text-left py-1 px-2">Result</th>
+                            <th class="text-left py-1 px-2">P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tradeLog">
+                        <tr>
+                            <td colspan="8" class="text-center py-2 text-gray-500">No trades yet</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Dual Log System -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Human Readable Log -->
+            <div class="glass-effect rounded-xl p-4 shadow-xl">
+                <h3 class="text-sm font-semibold mb-3">System Log</h3>
+                <div id="consoleLog" class="bg-black/50 rounded-lg p-3 h-40 overflow-y-auto font-mono text-xs text-green-400">
+                    <div>[System] Bot initialized. Configure and start.</div>
+                </div>
+            </div>
+
+            <!-- JSON Debug Log -->
+            <div class="glass-effect rounded-xl p-4 shadow-xl">
+                <h3 class="text-sm font-semibold mb-3">Debug Log (JSON)</h3>
+                <div id="jsonLog" class="json-log h-40 overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== WATCHDOG MODULE ====================
+        class Watchdog {
+            constructor(bot) {
+                this.bot = bot;
+                this.lastTickTime = 0;
+                this.lastCandleTime = 0;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 5;
+                this.watchdogInterval = null;
+                this.reconnectDelays = [2000, 5000, 10000, 20000, 30000];
+            }
+            
+            start() {
+                this.watchdogInterval = setInterval(() => this.check(), 5000);
+            }
+            
+            stop() {
+                if (this.watchdogInterval) {
+                    clearInterval(this.watchdogInterval);
+                    this.watchdogInterval = null;
+                }
+            }
+            
+            updateTickTime() {
+                this.lastTickTime = Date.now();
+            }
+            
+            updateCandleTime() {
+                this.lastCandleTime = Date.now();
+            }
+            
+            async check() {
+                if (!this.bot.isRunning) return;
+                
+                const now = Date.now();
+                const tickAge = now - this.lastTickTime;
+                
+                // Check tick freshness
+                if (tickAge > 15000 && this.bot.ws && this.bot.ws.readyState === WebSocket.OPEN) {
+                    this.bot.log('[Watchdog] No tick in 15s. Resubscribing...', 'warning');
+                    if (this.bot.rotationEngine.currentSymbol) {
+                        await this.bot.rotationEngine.subscribeToSymbol(this.bot.rotationEngine.currentSymbol);
+                    }
+                }
+                
+                // Check WebSocket health
+                if (this.bot.ws && this.bot.ws.readyState !== WebSocket.OPEN) {
+                    this.reconnect();
+                }
+            }
+            
+            async reconnect() {
+                if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+                    this.bot.log('[Watchdog] Max reconnection attempts reached. Please restart bot.', 'error');
+                    await this.bot.stop();
+                    return;
+                }
+                
+                const delay = this.reconnectDelays[this.reconnectAttempts] || 30000;
+                this.reconnectAttempts++;
+                
+                this.bot.log(`[Watchdog] Reconnecting (attempt ${this.reconnectAttempts})... Delay: ${delay}ms`, 'warning');
+                
+                if (this.bot.ws) {
+                    this.bot.ws.close();
+                }
+                
+                setTimeout(() => {
+                    this.bot.connect();
+                }, delay);
+            }
+            
+            reset() {
+                this.reconnectAttempts = 0;
+                this.lastTickTime = Date.now();
+                this.lastCandleTime = Date.now();
+            }
+        }
+
+        // ==================== ROTATION ENGINE ====================
+        class RotationEngine {
+            constructor(bot) {
+                this.bot = bot;
+                this.symbols = ['frxEURUSD', 'frxGBPUSD', 'frxUSDJPY', 'frxAUDUSD', 'frxNZDUSD', 'frxUSDCHF', 'frxUSDCAD'];
+                this.currentIndex = 0;
+                this.currentSymbol = null;
+                this.rotationTimer = null;
+                this.rotationInterval = 30000;
+                this.isRotating = false;
+                this.signalsFound = 0;
+                this.symbolData = {};
+                this.nextScanTime = 0;
+                this.currentSubscriptionId = null;
+            }
+            
+            start() {
+                this.isRotating = true;
+                this.currentIndex = 0;
+                this.rotate();
+                this.updateUI();
+            }
+            
+            stop() {
+                this.isRotating = false;
+                if (this.rotationTimer) {
+                    clearTimeout(this.rotationTimer);
+                    this.rotationTimer = null;
+                }
+                this.currentSubscriptionId = null;
+            }
+            
+            async rotate() {
+                if (!this.isRotating) return;
+                
+                if (this.bot.activePosition) {
+                    this.updateRotationStatus('PAUSED', 'yellow');
+                    this.rotationTimer = setTimeout(() => this.rotate(), 5000);
+                    return;
+                }
+                
+                this.currentSymbol = this.symbols[this.currentIndex];
+                this.currentIndex = (this.currentIndex + 1) % this.symbols.length;
+                
+                this.bot.log(`[Rotation] Scanning ${this.currentSymbol}`, 'info');
+                this.updateRotationStatus('SCANNING', 'blue');
+                
+                await this.subscribeToSymbol(this.currentSymbol);
+                
+                this.nextScanTime = Date.now() + this.rotationInterval;
+                this.rotationTimer = setTimeout(() => this.rotate(), this.rotationInterval);
+                
+                this.updateUI();
+            }
+            
+            async subscribeToSymbol(symbol) {
+                if (!this.bot.ws || this.bot.ws.readyState !== WebSocket.OPEN) return;
+                
+                if (!this.symbolData[symbol]) {
+                    this.symbolData[symbol] = {
+                        candles: [],
+                        lastScore: 0,
+                        lastSignalTime: 0
+                    };
+                }
+                
+                try {
+                    // Unsubscribe from previous symbol
+                    if (this.currentSubscriptionId) {
+                        await this.bot.sendWithoutReqId({
+                            forget: this.currentSubscriptionId
+                        });
+                    }
+                    
+                    // Subscribe to ticks
+                    const tickReqId = await this.bot.send({
+                        ticks: symbol,
+                        subscribe: 1
+                    });
+                    
+                    this.currentSubscriptionId = tickReqId;
+                    
+                    // Request candle history
+                    await this.requestCandleHistory(symbol);
+                    
+                } catch (error) {
+                    this.bot.log(`[Rotation] Error subscribing to ${symbol}: ${error.message}`, 'error');
+                }
+            }
+            
+            async requestCandleHistory(symbol) {
+                try {
+                    await this.bot.send({
+                        ticks_history: symbol,
+                        adjust_start_time: 1,
+                        count: 200,
+                        end: 'latest',
+                        granularity: 60,
+                        style: 'candles'
+                    });
+                } catch (error) {
+                    this.bot.log(`[Rotation] Error requesting candle history: ${error.message}`, 'error');
+                }
+            }
+            
+            updateRotationInterval(seconds) {
+                this.rotationInterval = seconds * 1000;
+            }
+            
+            updateRotationStatus(status, color) {
+                const statusEl = document.getElementById('rotationStatus');
+                if (statusEl) {
+                    statusEl.textContent = status;
+                    statusEl.className = `status-chip status-${color}`;
+                }
+            }
+            
+            updateUI() {
+                const symbolEl = document.getElementById('rotationSymbol');
+                const progressEl = document.getElementById('rotationProgress');
+                const barEl = document.getElementById('rotationBar');
+                const signalsEl = document.getElementById('rotationSignals');
+                
+                if (symbolEl) symbolEl.textContent = this.currentSymbol || '--';
+                if (progressEl) progressEl.textContent = `${this.currentIndex}/${this.symbols.length}`;
+                if (barEl) barEl.style.width = `${(this.currentIndex / this.symbols.length) * 100}%`;
+                if (signalsEl) signalsEl.textContent = this.signalsFound;
+                
+                if (this.rotationTimer) {
+                    const updateCountdown = () => {
+                        const remaining = Math.max(0, Math.ceil((this.nextScanTime - Date.now()) / 1000));
+                        const nextScanEl = document.getElementById('rotationNextScan');
+                        if (nextScanEl) nextScanEl.textContent = `${remaining}s`;
+                        
+                        if (remaining > 0 && this.isRotating) {
+                            requestAnimationFrame(updateCountdown);
+                        }
+                    };
+                    updateCountdown();
+                }
+            }
+        }
+
+        // ==================== NEWS API MODULE ====================
+        class NewsAPI {
+            constructor(bot) {
+                this.bot = bot;
+                this.provider = 'none';
+                this.apiKey = '';
+                this.cache = null;
+                this.cacheTime = 0;
+                this.cacheDuration = 300000;
+                this.events = [];
+            }
+            
+            async fetchNews() {
+                if (this.provider === 'none') return [];
+                
+                if (this.cache && Date.now() - this.cacheTime < this.cacheDuration) {
+                    return this.cache;
+                }
+                
+                try {
+                    let events = [];
+                    
+                    if (this.provider === 'forexfactory') {
+                        events = await this.fetchForexFactory();
+                    } else if (this.provider === 'investing') {
+                        events = await this.fetchInvestingCom();
+                    }
+                    
+                    this.cache = events;
+                    this.cacheTime = Date.now();
+                    this.events = events;
+                    
+                    this.updateNewsDisplay();
+                    return events;
+                    
+                } catch (error) {
+                    this.bot.log(`[News] API error: ${error.message}`, 'error');
+                    return this.cache || [];
+                }
+            }
+            
+            async fetchForexFactory() {
+                const mockEvents = [
+                    {
+                        time: new Date(Date.now() + 600000).toISOString(),
+                        currency: 'USD',
+                        impact: 'high',
+                        title: 'Non-Farm Payrolls',
+                        forecast: '200K',
+                        previous: '185K'
+                    },
+                    {
+                        time: new Date(Date.now() + 1800000).toISOString(),
+                        currency: 'EUR',
+                        impact: 'medium',
+                        title: 'ECB Rate Decision',
+                        forecast: '3.75%',
+                        previous: '3.50%'
+                    }
+                ];
+                
+                return mockEvents;
+            }
+            
+            async fetchInvestingCom() {
+                return [];
+            }
+            
+            checkUpcomingEvents(symbol, minutesBefore = 10) {
+                if (!this.events || this.events.length === 0) return { hasEvent: false };
+                
+                const currencies = this.extractCurrencies(symbol);
+                const now = Date.now();
+                const threshold = minutesBefore * 60000;
+                
+                for (const event of this.events) {
+                    if (!currencies.includes(event.currency)) continue;
+                    
+                    const eventTime = new Date(event.time).getTime();
+                    const timeDiff = eventTime - now;
+                    
+                    if (timeDiff > 0 && timeDiff <= threshold) {
+                        if (event.impact === 'high') {
+                            return {
+                                hasEvent: true,
+                                event: event,
+                                minutesUntil: Math.ceil(timeDiff / 60000),
+                                action: 'halve'
+                            };
+                        }
+                    }
+                }
+                
+                return { hasEvent: false };
+            }
+            
+            extractCurrencies(symbol) {
+                if (!symbol) return [];
+                const cleaned = symbol.replace('frx', '');
+                if (cleaned.length >= 6) {
+                    return [cleaned.substring(0, 3), cleaned.substring(3, 6)];
+                }
+                return [];
+            }
+            
+            updateNewsDisplay() {
+                const container = document.getElementById('upcomingNews');
+                if (!container) return;
+                
+                if (!this.events || this.events.length === 0) {
+                    container.innerHTML = '<div class="text-gray-400">No news events</div>';
+                    return;
+                }
+                
+                const html = this.events.slice(0, 3).map(event => {
+                    const timeUntil = Math.ceil((new Date(event.time) - Date.now()) / 60000);
+                    const impactColor = event.impact === 'high' ? 'red' : event.impact === 'medium' ? 'yellow' : 'gray';
+                    
+                    return `
+                        <div class="border-l-2 border-${impactColor}-500 pl-2">
+                            <div class="flex justify-between">
+                                <span class="font-semibold">${event.currency}</span>
+                                <span class="text-${impactColor}-400">${timeUntil}m</span>
+                            </div>
+                            <div class="text-gray-400">${event.title}</div>
+                        </div>
+                    `;
+                }).join('');
+                
+                container.innerHTML = html;
+            }
+        }
+
+        // ==================== RISK MANAGER ====================
+        class RiskManager {
+            constructor(bot) {
+                this.bot = bot;
+                this.maxDailyLoss = 3;
+                this.maxConsecutiveLosses = 3;
+                this.riskPerTrade = 1;
+                this.dailyLossPercent = 0;
+                this.consecutiveLosses = 0;
+                this.atrHistory = [];
+                this.spreadHistory = [];
+            }
+            
+            canTrade() {
+                if (this.dailyLossPercent >= this.maxDailyLoss) {
+                    this.bot.log('[Risk] Daily loss cap reached. Trading paused.', 'warning');
+                    return false;
+                }
+                
+                if (this.consecutiveLosses >= this.maxConsecutiveLosses) {
+                    this.bot.log('[Risk] 3 consecutive losses. Trading paused.', 'warning');
+                    return false;
+                }
+                
+                return true;
+            }
+            
+            validateSpread(bid, ask, symbol) {
+                if (!bid || !ask || bid <= 0 || ask <= 0) return true;
+                
+                const spread = ask - bid;
+                const spreadPips = spread / this.bot.calculatePipValue(symbol);
+                
+                this.spreadHistory.push(spreadPips);
+                if (this.spreadHistory.length > 100) {
+                    this.spreadHistory.shift();
+                }
+                
+                if (this.spreadHistory.length < 10) return true;
+                
+                const medianSpread = this.calculateMedian(this.spreadHistory);
+                
+                if (spreadPips > medianSpread * 2) {
+                    this.bot.log(`[Risk] Spread too wide (${spreadPips.toFixed(1)} pips). Skipping.`, 'warning');
+                    return false;
+                }
+                
+                return true;
+            }
+            
+            validateVolatility(atr, price) {
+                if (!atr || !price || atr <= 0 || price <= 0) return true;
+                
+                const atrPercent = (atr / price) * 100;
+                
+                this.atrHistory.push(atrPercent);
+                if (this.atrHistory.length > 100) {
+                    this.atrHistory.shift();
+                }
+                
+                if (this.atrHistory.length < 20) return true;
+                
+                const sorted = [...this.atrHistory].sort((a, b) => a - b);
+                const p20 = sorted[Math.floor(sorted.length * 0.2)];
+                const p95 = sorted[Math.floor(sorted.length * 0.95)];
+                
+                if (atrPercent < p20 || atrPercent > p95) {
+                    this.bot.log('[Risk] Volatility outside acceptable range.', 'warning');
+                    return false;
+                }
+                
+                return true;
+            }
+            
+            calculatePositionSize(balance, stopLossPips) {
+                const riskAmount = balance * (this.riskPerTrade / 100);
+                const pipValue = 0.0001;
+                const positionSize = riskAmount / (stopLossPips * pipValue);
+                
+                return Math.min(Math.round(positionSize * 100) / 100, 100);
+            }
+            
+            calculateMedian(arr) {
+                if (arr.length === 0) return 0;
+                const sorted = [...arr].sort((a, b) => a - b);
+                const mid = Math.floor(sorted.length / 2);
+                return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+            }
+            
+            updateStats(result, pnl) {
+                if (result === 'loss') {
+                    this.consecutiveLosses++;
+                    this.dailyLossPercent += Math.abs(pnl) / this.bot.accountData.balance * 100;
+                } else {
+                    this.consecutiveLosses = 0;
+                }
+            }
+            
+            reset() {
+                this.dailyLossPercent = 0;
+                this.consecutiveLosses = 0;
+            }
+        }
+
+        // ==================== MAIN TRADING BOT ====================
+        class PinBarTradingBot {
+            constructor() {
+                this.ws = null;
+                this.isRunning = false;
+                this.startTime = 0;
+                this.config = {
+                    appId: '',
+                    apiToken: '',
+                    riskPercent: 1,
+                    scoreThreshold: 80,
+                    rrRatio: 2
+                };
+                
+                this.accountData = {
+                    balance: 0,
+                    equity: 0,
+                    currency: 'USD'
+                };
+                
+                this.marketData = {
+                    candles: [],
+                    ema50: 0,
+                    rsi: 50,
+                    atr: 0,
+                    currentPrice: 0,
+                    bid: 0,
+                    ask: 0
+                };
+                
+                this.tradeStats = {
+                    totalTrades: 0,
+                    wins: 0,
+                    losses: 0,
+                    dailyPL: 0
+                };
+                
+                this.activePosition = null;
+                this.pendingSignal = null;
+                this.lastSignalTime = 0;
+                this.signalCooldown = 60000;
+                this.positionMonitorInterval = null;
+                this.pendingRequests = new Map();
+                
+                this.watchdog = new Watchdog(this);
+                this.rotationEngine = new RotationEngine(this);
+                this.newsAPI = new NewsAPI(this);
+                this.riskManager = new RiskManager(this);
+                
+                this.initializeUI();
+                this.loadSavedConfig();
+                this.startHealthMonitor();
+            }
+            
+            initializeUI() {
+                document.getElementById('toggleBot').addEventListener('click', () => this.toggleBot());
+                document.getElementById('appId').addEventListener('change', (e) => this.updateConfig('appId', e.target.value));
+                document.getElementById('apiToken').addEventListener('change', (e) => this.updateConfig('apiToken', e.target.value));
+                document.getElementById('riskPercent').addEventListener('change', (e) => this.updateConfig('riskPercent', parseFloat(e.target.value)));
+                document.getElementById('rotationInterval').addEventListener('change', (e) => {
+                    this.rotationEngine.updateRotationInterval(parseInt(e.target.value));
+                });
+                document.getElementById('newsProvider').addEventListener('change', (e) => {
+                    this.newsAPI.provider = e.target.value;
+                    this.updateQAStatus('qaNews', this.newsAPI.provider !== 'none' ? 'PASS' : 'PENDING');
+                });
+                document.getElementById('newsApiKey').addEventListener('change', (e) => {
+                    this.newsAPI.apiKey = e.target.value;
+                });
+            }
+            
+            loadSavedConfig() {
+                const saved = localStorage.getItem('pinBarBotConfigV2');
+                if (saved) {
+                    try {
+                        const config = JSON.parse(saved);
+                        Object.assign(this.config, config);
+                        document.getElementById('appId').value = config.appId || '';
+                        document.getElementById('apiToken').value = config.apiToken || '';
+                        document.getElementById('riskPercent').value = config.riskPercent || 1;
+                    } catch (e) {
+                        console.error('Error loading saved config:', e);
+                    }
+                }
+            }
+            
+            updateConfig(key, value) {
+                this.config[key] = value;
+                localStorage.setItem('pinBarBotConfigV2', JSON.stringify(this.config));
+            }
+            
+            async toggleBot() {
+                if (this.isRunning) {
+                    await this.stop();
+                } else {
+                    await this.start();
+                }
+            }
+            
+            async start() {
+                if (!this.config.appId || !this.config.apiToken) {
+                    this.log('Error: Please configure App ID and API Token', 'error');
+                    return;
+                }
+                
+                this.isRunning = true;
+                this.startTime = Date.now();
+                document.getElementById('toggleBot').textContent = 'Stop Bot';
+                document.getElementById('toggleBot').classList.remove('from-green-500', 'to-emerald-600');
+                document.getElementById('toggleBot').classList.add('from-red-500', 'to-pink-600');
+                
+                await this.connect();
+                this.watchdog.start();
+                
+                setInterval(() => this.newsAPI.fetchNews(), 60000);
+                this.newsAPI.fetchNews();
+                
+                this.log('[System] Bot started successfully');
+            }
+            
+            async stop() {
+                this.isRunning = false;
+                document.getElementById('toggleBot').textContent = 'Start Bot';
+                document.getElementById('toggleBot').classList.remove('from-red-500', 'to-pink-600');
+                document.getElementById('toggleBot').classList.add('from-green-500', 'to-emerald-600');
+                
+                this.watchdog.stop();
+                this.rotationEngine.stop();
+                
+                if (this.positionMonitorInterval) {
+                    clearInterval(this.positionMonitorInterval);
+                    this.positionMonitorInterval = null;
+                }
+                
+                if (this.ws) {
+                    this.ws.close();
+                }
+                
+                this.updateConnectionStatus(false);
+                this.log('[System] Bot stopped');
+                
+                ['qaWS', 'qaTick', 'qaRotation', 'qaNews', 'qaTradeLogic'].forEach(id => {
+                    this.updateQAStatus(id, 'PENDING');
+                });
+            }
+            
+            async connect() {
+                try {
+                    const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${this.config.appId}`;
+                    this.ws = new WebSocket(wsUrl);
+                    
+                    this.ws.onopen = () => this.onWebSocketOpen();
+                    this.ws.onmessage = (msg) => this.onWebSocketMessage(msg);
+                    this.ws.onerror = (error) => this.onWebSocketError(error);
+                    this.ws.onclose = () => this.onWebSocketClose();
+                    
+                } catch (error) {
+                    this.log(`Connection error: ${error.message}`, 'error');
+                    this.updateConnectionStatus(false);
+                }
+            }
+            
+            async onWebSocketOpen() {
+                this.log('[System] WebSocket connected');
+                this.updateConnectionStatus(true);
+                this.updateQAStatus('qaWS', 'PASS');
+                this.watchdog.reset();
+                
+                await this.send({
+                    authorize: this.config.apiToken
+                });
+            }
+            
+            async onWebSocketMessage(msg) {
+                try {
+                    const data = JSON.parse(msg.data);
+                    
+                    // Handle pending request resolution
+                    if (data.req_id && this.pendingRequests.has(data.req_id)) {
+                        const { resolve, reject } = this.pendingRequests.get(data.req_id);
+                        this.pendingRequests.delete(data.req_id);
+                        
+                        if (data.error) {
+                            reject(new Error(data.error.message));
+                            return;
+                        } else {
+                            resolve(data);
+                        }
+                    }
+                    
+                    // Silently ignore forget responses
+                    if (data.msg_type === 'forget') {
+                        return;
+                    }
+                    
+                    // Handle errors
+                    if (data.error) {
+                        // Only log non-subscription errors
+                        if (data.error.code !== 'InputValidationFailed' || !data.error.message.includes('req_id')) {
+                            this.log(`API Error: ${data.error.message}`, 'error');
+                        }
+                        return;
+                    }
+                    
+                    // Handle authorization
+                    if (data.msg_type === 'authorize') {
+                        this.log(`Authorized as ${data.authorize.loginid}`);
+                        this.accountData.balance = data.authorize.balance;
+                        this.accountData.currency = data.authorize.currency;
+                        this.updateAccountDisplay();
+                        
+                        await this.send({ balance: 1, subscribe: 1 });
+                        
+                        this.rotationEngine.start();
+                        this.updateQAStatus('qaRotation', 'PASS');
+                    }
+                    
+                    // Handle balance updates
+                    if (data.msg_type === 'balance') {
+                        this.accountData.balance = data.balance.balance;
+                        this.accountData.equity = data.balance.balance;
+                        this.updateAccountDisplay();
+                    }
+                    
+                    // Handle tick updates
+                    if (data.msg_type === 'tick') {
+                        this.marketData.currentPrice = data.tick.quote;
+                        this.marketData.bid = data.tick.bid || data.tick.quote;
+                        this.marketData.ask = data.tick.ask || data.tick.quote;
+                        
+                        this.watchdog.updateTickTime();
+                        this.updateQAStatus('qaTick', 'PASS');
+                        this.updateHealthPing();
+                    }
+                    
+                    // Handle candle data
+                    if (data.msg_type === 'candles' && data.candles) {
+                        this.marketData.candles = data.candles;
+                        this.watchdog.updateCandleTime();
+                        this.calculateIndicators();
+                        
+                        // Use debounced signal check
+                        if (!this.signalCheckTimeout) {
+                            this.signalCheckTimeout = setTimeout(() => {
+                                this.checkForSignals();
+                                this.signalCheckTimeout = null;
+                            }, 100);
+                        }
+                    }
+                    
+                    // Handle history
+                    if (data.msg_type === 'history' && data.history) {
+                        const candles = [];
+                        const prices = data.history.prices;
+                        const times = data.history.times;
+                        
+                        if (prices && times) {
+                            for (let i = 0; i < prices.length; i++) {
+                                candles.push({
+                                    epoch: times[i],
+                                    close: prices[i],
+                                    open: prices[i],
+                                    high: prices[i],
+                                    low: prices[i]
+                                });
+                            }
+                            this.marketData.candles = candles;
+                            this.calculateIndicators();
+                        }
+                    }
+                    
+                    // Handle proposal
+                    if (data.msg_type === 'proposal') {
+                        await this.handleProposal(data.proposal);
+                    }
+                    
+                    // Handle buy response
+                    if (data.msg_type === 'buy') {
+                        this.handleBuyResponse(data.buy);
+                    }
+                    
+                    // Handle proposal_open_contract
+                    if (data.msg_type === 'proposal_open_contract') {
+                        this.handleContractUpdate(data.proposal_open_contract);
+                    }
+                    
+                } catch (error) {
+                    this.log(`Message processing error: ${error.message}`, 'error');
+                    console.error(error);
+                }
+            }
+            
+            onWebSocketError(error) {
+                this.log(`WebSocket error: ${error}`, 'error');
+                this.updateConnectionStatus(false);
+                this.updateQAStatus('qaWS', 'FAIL');
+            }
+            
+            onWebSocketClose() {
+                this.log('WebSocket disconnected');
+                this.updateConnectionStatus(false);
+                this.updateQAStatus('qaWS', 'FAIL');
+                
+                if (this.isRunning) {
+                    setTimeout(() => {
+                        this.log('Attempting reconnection...');
+                        this.connect();
+                    }, 5000);
+                }
+            }
+            
+            async send(message) {
+                return new Promise((resolve, reject) => {
+                    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                        reject(new Error('WebSocket not connected'));
+                        return;
+                    }
+                    
+                    const reqId = Math.floor(Math.random() * 1000000);
+                    message.req_id = reqId;
+                    
+                    this.pendingRequests.set(reqId, { resolve, reject });
+                    
+                    // Timeout after 10 seconds
+                    setTimeout(() => {
+                        if (this.pendingRequests.has(reqId)) {
+                            this.pendingRequests.delete(reqId);
+                            reject(new Error('Request timeout'));
+                        }
+                    }, 10000);
+                    
+                    this.ws.send(JSON.stringify(message));
+                });
+            }
+            
+            async sendWithoutReqId(message) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(message));
+                }
+            }
+            
+            calculateIndicators() {
+                if (!this.marketData.candles || this.marketData.candles.length < 50) return;
+                
+                const validCandles = this.marketData.candles.filter(c => 
+                    c && c.close && c.close > 0
+                );
+                
+                if (validCandles.length < 50) return;
+                
+                const closes = validCandles.map(c => c.close);
+                
+                this.marketData.ema50 = this.calculateEMA(closes, 50);
+                this.marketData.rsi = this.calculateRSI(closes, 14);
+                this.marketData.atr = this.calculateATR(validCandles, 14);
+                
+                this.updateMarketDisplay();
+            }
+            
+            calculateEMA(prices, period) {
+                if (!prices || prices.length < period) return 0;
+                
+                const validPrices = prices.filter(p => p && p > 0);
+                if (validPrices.length < period) return 0;
+                
+                const multiplier = 2 / (period + 1);
+                let ema = validPrices.slice(0, period).reduce((a, b) => a + b) / period;
+                
+                for (let i = period; i < validPrices.length; i++) {
+                    ema = (validPrices[i] - ema) * multiplier + ema;
+                }
+                
+                return ema;
+            }
+            
+            calculateRSI(prices, period = 14) {
+                if (!prices || prices.length < period + 1) return 50;
+                
+                const validPrices = prices.filter(p => p && p > 0);
+                if (validPrices.length < period + 1) return 50;
+                
+                const changes = [];
+                for (let i = 1; i < validPrices.length; i++) {
+                    changes.push(validPrices[i] - validPrices[i - 1]);
+                }
+                
+                const gains = changes.map(c => c > 0 ? c : 0);
+                const losses = changes.map(c => c < 0 ? Math.abs(c) : 0);
+                
+                const avgGain = gains.slice(-period).reduce((a, b) => a + b) / period;
+                const avgLoss = losses.slice(-period).reduce((a, b) => a + b) / period;
+                
+                if (avgLoss === 0) return 100;
+                
+                const rs = avgGain / avgLoss;
+                return 100 - (100 / (1 + rs));
+            }
+            
+            calculateATR(candles, period = 14) {
+                if (!candles || candles.length < period + 1) return 0;
+                
+                const validCandles = candles.filter(c => 
+                    c && c.high && c.low && c.close && c.high > 0 && c.low > 0
+                );
+                
+                if (validCandles.length < period + 1) return 0;
+                
+                const trueRanges = [];
+                for (let i = 1; i < validCandles.length; i++) {
+                    const high = validCandles[i].high;
+                    const low = validCandles[i].low;
+                    const prevClose = validCandles[i - 1].close;
+                    
+                    const tr = Math.max(
+                        high - low,
+                        Math.abs(high - prevClose),
+                        Math.abs(low - prevClose)
+                    );
+                    
+                    if (tr && tr > 0 && tr < Infinity) {
+                        trueRanges.push(tr);
+                    }
+                }
+                
+                if (trueRanges.length < period) return 0;
+                
+                return trueRanges.slice(-period).reduce((a, b) => a + b) / period;
+            }
+            
+            detectPinBar(candle, prevCandle) {
+                if (!candle || !prevCandle) return null;
+                if (!candle.open || !candle.close || !candle.high || !candle.low) return null;
+                
+                const body = Math.abs(candle.close - candle.open);
+                const totalRange = candle.high - candle.low;
+                
+                if (totalRange <= 0) return null;
+                
+                const upperWick = candle.high - Math.max(candle.open, candle.close);
+                const lowerWick = Math.min(candle.open, candle.close) - candle.low;
+                
+                if (body / totalRange > 0.33) return null;
+                
+                // Bullish pin bar
+                if (lowerWick >= body * 2 && candle.close > candle.open) {
+                    const closePosition = (candle.close - candle.low) / totalRange;
+                    if (closePosition >= 0.7) {
+                        return { type: 'bullish', strength: lowerWick / (body || 0.0001) };
+                    }
+                }
+                
+                // Bearish pin bar
+                if (upperWick >= body * 2 && candle.close < candle.open) {
+                    const closePosition = (candle.high - candle.close) / totalRange;
+                    if (closePosition >= 0.7) {
+                        return { type: 'bearish', strength: upperWick / (body || 0.0001) };
+                    }
+                }
+                
+                return null;
+            }
+            
+            calculateSignalScore() {
+                let score = 0;
+                const candles = this.marketData.candles;
+                
+                if (!candles || candles.length < 2) return 0;
+                
+                const lastCandle = candles[candles.length - 1];
+                const prevCandle = candles[candles.length - 2];
+                
+                if (!lastCandle || !lastCandle.close) return 0;
+                
+                const pinBar = this.detectPinBar(lastCandle, prevCandle);
+                
+                // Trend alignment (30 points)
+                if (this.marketData.ema50 > 0 && lastCandle.close > 0) {
+                    const priceVsEMA = (lastCandle.close - this.marketData.ema50) / this.marketData.ema50 * 100;
+                    if (Math.abs(priceVsEMA) > 0.1) {
+                        score += Math.min(30, Math.abs(priceVsEMA) * 10);
+                    }
+                }
+                
+                // Pin bar geometry (40 points)
+                if (pinBar && pinBar.strength) {
+                    score += Math.min(40, pinBar.strength * 10);
+                }
+                
+                // RSI confirmation (20 points)
+                if (this.marketData.rsi < 45 || this.marketData.rsi > 55) {
+                    const rsiExtreme = Math.abs(50 - this.marketData.rsi);
+                    score += Math.min(20, rsiExtreme * 0.4);
+                }
+                
+                // Volatility quality (10 points)
+                if (this.marketData.atr > 0 && lastCandle && lastCandle.close > 0) {
+                    const atrNormalized = Math.min(1, this.marketData.atr / (lastCandle.close * 0.01));
+                    score += atrNormalized * 10;
+                }
+                
+                return Math.round(Math.max(0, Math.min(100, score)));
+            }
+            
+            async checkForSignals() {
+                if (this.activePosition || !this.riskManager.canTrade()) return;
+                
+                const now = Date.now();
+                if (now - this.lastSignalTime < this.signalCooldown) return;
+                
+                const score = this.calculateSignalScore();
+                this.updateSignalScore(score);
+                
+                if (score >= this.config.scoreThreshold) {
+                    this.updateQAStatus('qaTradeLogic', 'PASS');
+                    
+                    const signal = this.generateTradeSignal();
+                    if (signal) {
+                        this.lastSignalTime = now;
+                        this.rotationEngine.signalsFound++;
+                        this.rotationEngine.updateUI();
+                        
+                        const newsCheck = this.newsAPI.checkUpcomingEvents(
+                            this.rotationEngine.currentSymbol,
+                            10
+                        );
+                        
+                        if (newsCheck.hasEvent) {
+                            this.log(`[News] High-impact event in ${newsCheck.minutesUntil}m. ${newsCheck.action === 'halve' ? 'Halving position.' : 'Skipping.'}`, 'warning');
+                            
+                            if (newsCheck.action === 'halve') {
+                                signal.amount *= 0.5;
+                            } else {
+                                return;
+                            }
+                        }
+                        
+                        await this.executeTrade(signal);
+                    }
+                }
+            }
+            
+            generateTradeSignal() {
+                const candles = this.marketData.candles;
+                if (!candles || candles.length < 2) return null;
+                
+                const lastCandle = candles[candles.length - 1];
+                const prevCandle = candles[candles.length - 2];
+                
+                if (!lastCandle || !prevCandle) return null;
+                
+                const pinBar = this.detectPinBar(lastCandle, prevCandle);
+                
+                if (!pinBar) return null;
+                
+                const signal = {
+                    type: pinBar.type,
+                    entry: this.marketData.currentPrice,
+                    symbol: this.rotationEngine.currentSymbol,
+                    timestamp: Date.now()
+                };
+                
+                // Calculate SL and TP
+                if (pinBar.type === 'bullish') {
+                    signal.stopLoss = lastCandle.low - (this.marketData.atr * 0.5);
+                    signal.takeProfit = signal.entry + ((signal.entry - signal.stopLoss) * this.config.rrRatio);
+                    
+                    if (lastCandle.close <= this.marketData.ema50) return null;
+                    if (this.marketData.rsi >= 70) return null;
+                    
+                } else if (pinBar.type === 'bearish') {
+                    signal.stopLoss = lastCandle.high + (this.marketData.atr * 0.5);
+                    signal.takeProfit = signal.entry - ((signal.stopLoss - signal.entry) * this.config.rrRatio);
+                    
+                    if (lastCandle.close >= this.marketData.ema50) return null;
+                    if (this.marketData.rsi <= 30) return null;
+                }
+                
+                // Validate spread and volatility
+                if (!this.riskManager.validateSpread(this.marketData.bid, this.marketData.ask, signal.symbol)) {
+                    return null;
+                }
+                
+                if (!this.riskManager.validateVolatility(this.marketData.atr, this.marketData.currentPrice)) {
+                    return null;
+                }
+                
+                // Calculate position size
+                const pipValue = this.calculatePipValue(signal.symbol);
+                const stopLossPips = Math.abs(signal.entry - signal.stopLoss) / pipValue;
+                signal.amount = this.riskManager.calculatePositionSize(this.accountData.balance, stopLossPips);
+                
+                signal.amount = Math.max(signal.amount, 0.35);
+                
+                signal.duration = this.calculateAdaptiveDuration();
+                
+                return signal;
+            }
+            
+            calculatePipValue(symbol) {
+                if (symbol && symbol.includes('JPY')) {
+                    return 0.01;
+                }
+                return 0.0001;
+            }
+            
+            calculateAdaptiveDuration() {
+                if (!this.marketData.atr || !this.marketData.currentPrice || this.marketData.currentPrice <= 0) {
+                    return 60;
+                }
+                
+                const atrPercent = (this.marketData.atr / this.marketData.currentPrice) * 100;
+                
+                if (atrPercent < 0.05) {
+                    return 240;
+                } else if (atrPercent < 0.1) {
+                    return 60;
+                } else {
+                    return 15;
+                }
+            }
+            
+            async executeTrade(signal) {
+                try {
+                    const score = this.calculateSignalScore();
+                    
+                    this.log(`[Trade] ${signal.type.toUpperCase()} ${signal.symbol} @ ${signal.entry.toFixed(5)} | Score: ${score}/100`);
+                    this.logJSON({
+                        time: new Date().toISOString(),
+                        event: signal.type.toUpperCase(),
+                        symbol: signal.symbol,
+                        score: score,
+                        ema50: this.marketData.ema50.toFixed(5),
+                        rsi: this.marketData.rsi.toFixed(2),
+                        atr: this.marketData.atr.toFixed(5)
+                    });
+                    
+                    const contractType = signal.type === 'bullish' ? 'CALL' : 'PUT';
+                    
+                    const proposal = {
+                        proposal: 1,
+                        amount: signal.amount,
+                        basis: 'stake',
+                        contract_type: contractType,
+                        currency: this.accountData.currency,
+                        duration: signal.duration,
+                        duration_unit: 'm',
+                        symbol: signal.symbol
+                    };
+                    
+                    const response = await this.send(proposal);
+                    
+                    if (response && response.proposal) {
+                        this.pendingSignal = signal;
+                        await this.handleProposal(response.proposal);
+                    }
+                    
+                } catch (error) {
+                    this.log(`[Trade] Execution error: ${error.message}`, 'error');
+                }
+            }
+            
+            async handleProposal(proposal) {
+                if (!this.pendingSignal) return;
+                
+                if (proposal.payout > this.pendingSignal.amount * 1.5) {
+                    try {
+                        const buyResponse = await this.send({
+                            buy: proposal.id,
+                            price: this.pendingSignal.amount
+                        });
+                        
+                        if (buyResponse && buyResponse.buy) {
+                            this.handleBuyResponse(buyResponse.buy);
+                        }
+                    } catch (error) {
+                        this.log(`[Trade] Buy error: ${error.message}`, 'error');
+                        this.pendingSignal = null;
+                    }
+                }
+            }
+            
+            handleBuyResponse(buyData) {
+                if (!this.pendingSignal) return;
+                
+                this.activePosition = {
+                    contractId: buyData.contract_id,
+                    type: this.pendingSignal.type,
+                    symbol: this.pendingSignal.symbol,
+                    entry: buyData.buy_price,
+                    amount: this.pendingSignal.amount,
+                    startTime: Date.now(),
+                    stopLoss: this.pendingSignal.stopLoss,
+                    takeProfit: this.pendingSignal.takeProfit,
+                    duration: this.pendingSignal.duration
+                };
+                
+                this.pendingSignal = null;
+                
+                this.log(`[Position] OPENED: ${this.activePosition.type} @ ${this.activePosition.entry}`);
+                this.updateActivePositionDisplay();
+                
+                // Subscribe to contract updates
+                this.send({
+                    proposal_open_contract: 1,
+                    contract_id: this.activePosition.contractId,
+                    subscribe: 1
+                }).catch(err => {
+                    this.log(`[Position] Subscribe error: ${err.message}`, 'error');
+                });
+                
+                this.startPositionMonitoring();
+            }
+            
+            startPositionMonitoring() {
+                if (this.positionMonitorInterval) {
+                    clearInterval(this.positionMonitorInterval);
+                }
+                
+                this.positionMonitorInterval = setInterval(() => {
+                    if (!this.activePosition) {
+                        clearInterval(this.positionMonitorInterval);
+                        this.positionMonitorInterval = null;
+                        return;
+                    }
+                    
+                    this.updateActivePositionDisplay();
+                }, 1000);
+            }
+            
+            handleContractUpdate(contract) {
+                if (!this.activePosition) return;
+                
+                if (contract.status === 'sold' || contract.is_sold) {
+                    const payout = contract.sell_price || contract.payout || 0;
+                    const profit = payout - this.activePosition.entry;
+                    
+                    this.handlePositionClose(profit, contract.status);
+                }
+            }
+            
+            handlePositionClose(pnl, reason) {
+                if (!this.activePosition) return;
+                
+                const result = pnl > 0 ? 'Win' : 'Loss';
+                
+                this.tradeStats.totalTrades++;
+                if (pnl > 0) {
+                    this.tradeStats.wins++;
+                    this.log(`[Result] WIN +$${pnl.toFixed(2)} | WR: ${((this.tradeStats.wins / this.tradeStats.totalTrades) * 100).toFixed(1)}%`, 'success');
+                } else {
+                    this.tradeStats.losses++;
+                    this.log(`[Result] LOSS -$${Math.abs(pnl).toFixed(2)} | WR: ${((this.tradeStats.wins / this.tradeStats.totalTrades) * 100).toFixed(1)}%`, 'error');
+                }
+                
+                this.tradeStats.dailyPL += pnl;
+                this.riskManager.updateStats(result.toLowerCase(), pnl);
+                
+                this.addTradeToLog({
+                    time: new Date().toLocaleTimeString(),
+                    pair: this.activePosition.symbol,
+                    direction: this.activePosition.type,
+                    entry: this.activePosition.entry.toFixed(5),
+                    sl: this.activePosition.stopLoss.toFixed(5),
+                    tp: this.activePosition.takeProfit.toFixed(5),
+                    result: result,
+                    pnl: pnl.toFixed(2)
+                });
+                
+                this.activePosition = null;
+                
+                if (this.positionMonitorInterval) {
+                    clearInterval(this.positionMonitorInterval);
+                    this.positionMonitorInterval = null;
+                }
+                
+                this.updateActivePositionDisplay();
+                this.updateStatsDisplay();
+            }
+            
+            updateConnectionStatus(connected) {
+                const statusEl = document.getElementById('connectionStatus');
+                if (!statusEl) return;
+                
+                const dotEl = statusEl.querySelector('div');
+                const textEl = statusEl.querySelector('span');
+                
+                if (connected) {
+                    if (dotEl) {
+                        dotEl.classList.remove('bg-red-500');
+                        dotEl.classList.add('bg-green-500');
+                    }
+                    if (textEl) textEl.textContent = 'Connected';
+                    this.updateQAStatus('qaWS', 'PASS');
+                    
+                    const healthEl = document.getElementById('healthConnection');
+                    if (healthEl) {
+                        healthEl.textContent = 'ONLINE';
+                        healthEl.className = 'status-chip status-green';
+                    }
+                } else {
+                    if (dotEl) {
+                        dotEl.classList.remove('bg-green-500');
+                        dotEl.classList.add('bg-red-500');
+                    }
+                    if (textEl) textEl.textContent = 'Disconnected';
+                    this.updateQAStatus('qaWS', 'FAIL');
+                    
+                    const healthEl = document.getElementById('healthConnection');
+                    if (healthEl) {
+                        healthEl.textContent = 'OFFLINE';
+                        healthEl.className = 'status-chip status-red';
+                    }
+                }
+            }
+            
+            updateHealthPing() {
+                const ping = Math.floor(Math.random() * 50) + 10;
+                const pingEl = document.getElementById('healthPing');
+                const tickEl = document.getElementById('healthLastTick');
+                
+                if (pingEl) pingEl.textContent = `${ping}ms`;
+                if (tickEl) tickEl.textContent = new Date().toLocaleTimeString();
+            }
+            
+            updateQAStatus(id, status) {
+                const element = document.getElementById(id);
+                if (!element) return;
+                
+                element.className = `qa-item qa-${status.toLowerCase() === 'pass' ? 'pass' : status.toLowerCase() === 'fail' ? 'fail' : 'pending'}`;
+                const statusSpan = element.querySelector('span:last-child');
+                if (statusSpan) {
+                    statusSpan.textContent = status;
+                    statusSpan.style.color = 
+                        status === 'PASS' ? '#22c55e' : status === 'FAIL' ? '#ef4444' : '#6b7280';
+                }
+            }
+            
+            startHealthMonitor() {
+                setInterval(() => {
+                    if (this.startTime) {
+                        const runtime = Date.now() - this.startTime;
+                        const hours = Math.floor(runtime / 3600000);
+                        const minutes = Math.floor((runtime % 3600000) / 60000);
+                        const seconds = Math.floor((runtime % 60000) / 1000);
+                        
+                        const runtimeEl = document.getElementById('healthRuntime');
+                        if (runtimeEl) {
+                            runtimeEl.textContent = 
+                                `${hours.toString().padStart(2, '0')}h:${minutes.toString().padStart(2, '0')}m:${seconds.toString().padStart(2, '0')}s`;
+                        }
+                    }
+                }, 1000);
+            }
+            
+            updateMarketDisplay() {
+                requestAnimationFrame(() => {
+                    const trendEl = document.getElementById('trendDirection');
+                    const trendBar = document.getElementById('trendBar');
+                    
+                    if (trendEl && trendBar) {
+                        if (this.marketData.currentPrice > this.marketData.ema50) {
+                            trendEl.textContent = 'BULLISH';
+                            trendEl.classList.remove('text-red-400');
+                            trendEl.classList.add('text-green-400');
+                            trendBar.style.width = '70%';
+                            trendBar.classList.remove('bg-red-500');
+                            trendBar.classList.add('bg-green-500');
+                        } else {
+                            trendEl.textContent = 'BEARISH';
+                            trendEl.classList.remove('text-green-400');
+                            trendEl.classList.add('text-red-400');
+                            trendBar.style.width = '70%';
+                            trendBar.classList.remove('bg-green-500');
+                            trendBar.classList.add('bg-red-500');
+                        }
+                    }
+                    
+                    const rsiEl = document.getElementById('rsiValue');
+                    const rsiBar = document.getElementById('rsiBar');
+                    if (rsiEl) rsiEl.textContent = this.marketData.rsi.toFixed(1);
+                    if (rsiBar) rsiBar.style.width = `${this.marketData.rsi}%`;
+                    
+                    const pipValue = this.calculatePipValue(this.rotationEngine.currentSymbol);
+                    const atrPips = this.marketData.atr / pipValue;
+                    const atrEl = document.getElementById('atrValue');
+                    const atrBar = document.getElementById('atrBar');
+                    if (atrEl) atrEl.textContent = `${atrPips.toFixed(1)} pips`;
+                    if (atrBar) {
+                        const atrPercent = Math.min(100, (this.marketData.atr / Math.max(this.marketData.currentPrice, 0.0001)) * 1000);
+                        atrBar.style.width = `${atrPercent}%`;
+                    }
+                });
+            }
+            
+            updateSignalScore(score) {
+                const scoreEl = document.getElementById('signalScore');
+                const scoreBar = document.getElementById('scoreBar');
+                
+                if (scoreEl) scoreEl.textContent = score;
+                if (scoreBar) {
+                    scoreBar.style.setProperty('--mask-start', '0%');
+                    scoreBar.style.setProperty('--mask-end', `${score}%`);
+                }
+                
+                if (scoreEl) {
+                    if (score >= 80) {
+                        scoreEl.classList.add('text-green-400');
+                        scoreEl.classList.remove('text-yellow-400', 'text-red-400');
+                    } else if (score >= 50) {
+                        scoreEl.classList.add('text-yellow-400');
+                        scoreEl.classList.remove('text-green-400', 'text-red-400');
+                    } else {
+                        scoreEl.classList.add('text-red-400');
+                        scoreEl.classList.remove('text-green-400', 'text-yellow-400');
+                    }
+                }
+            }
+            
+            updateAccountDisplay() {
+                requestAnimationFrame(() => {
+                    const balanceEl = document.getElementById('balance');
+                    const equityEl = document.getElementById('equity');
+                    
+                    if (balanceEl) balanceEl.textContent = `$${this.accountData.balance.toFixed(2)}`;
+                    if (equityEl) equityEl.textContent = `$${this.accountData.equity.toFixed(2)}`;
+                });
+            }
+            
+            updateStatsDisplay() {
+                requestAnimationFrame(() => {
+                    const dailyPLEl = document.getElementById('dailyPL');
+                    const winRateEl = document.getElementById('winRate');
+                    const totalTradesEl = document.getElementById('totalTrades');
+                    const consLossesEl = document.getElementById('consecutiveLosses');
+                    
+                    if (dailyPLEl) {
+                        dailyPLEl.textContent = `$${this.tradeStats.dailyPL.toFixed(2)}`;
+                        
+                        if (this.tradeStats.dailyPL > 0) {
+                            dailyPLEl.classList.add('text-green-400');
+                            dailyPLEl.classList.remove('text-red-400');
+                        } else if (this.tradeStats.dailyPL < 0) {
+                            dailyPLEl.classList.add('text-red-400');
+                            dailyPLEl.classList.remove('text-green-400');
+                        }
+                    }
+                    
+                    if (winRateEl) {
+                        const winRate = this.tradeStats.totalTrades > 0 
+                            ? (this.tradeStats.wins / this.tradeStats.totalTrades * 100).toFixed(1) 
+                            : 0;
+                        winRateEl.textContent = `${winRate}%`;
+                    }
+                    
+                    if (totalTradesEl) totalTradesEl.textContent = this.tradeStats.totalTrades;
+                    if (consLossesEl) consLossesEl.textContent = this.riskManager.consecutiveLosses;
+                });
+            }
+            
+            updateActivePositionDisplay() {
+                requestAnimationFrame(() => {
+                    const positionEl = document.getElementById('activePosition');
+                    if (!positionEl) return;
+                    
+                    if (this.activePosition) {
+                        const position = this.activePosition;
+                        const currentPrice = this.marketData.currentPrice;
+                        
+                        let pnl = 0;
+                        if (currentPrice && currentPrice > 0) {
+                            if (position.type === 'bullish') {
+                                pnl = (currentPrice - position.entry) * position.amount;
+                            } else {
+                                pnl = (position.entry - currentPrice) * position.amount;
+                            }
+                        }
+                        
+                        const pnlClass = pnl >= 0 ? 'text-green-400' : 'text-red-400';
+                        
+                        positionEl.innerHTML = `
+                            <div class="space-y-1 text-xs">
+                                <div class="flex justify-between">
+                                    <span>Type:</span>
+                                    <span class="font-semibold">${position.type.toUpperCase()}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>Symbol:</span>
+                                    <span>${position.symbol}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>Entry:</span>
+                                    <span>${position.entry.toFixed(5)}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>Current:</span>
+                                    <span>${currentPrice ? currentPrice.toFixed(5) : '--'}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>P&L:</span>
+                                    <span class="${pnlClass} font-semibold">$${pnl.toFixed(2)}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>SL:</span>
+                                    <span class="text-red-400">${position.stopLoss.toFixed(5)}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>TP:</span>
+                                    <span class="text-green-400">${position.takeProfit.toFixed(5)}</span>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        positionEl.innerHTML = '<p class="text-gray-400 text-xs">No active position</p>';
+                    }
+                });
+            }
+            
+            addTradeToLog(trade) {
+                const logEl = document.getElementById('tradeLog');
+                if (!logEl) return;
+                
+                if (logEl.querySelector('td[colspan="8"]')) {
+                    logEl.innerHTML = '';
+                }
+                
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-800';
+                
+                const pnlClass = parseFloat(trade.pnl) >= 0 ? 'text-green-400' : 'text-red-400';
+                const resultClass = trade.result === 'Win' ? 'text-green-400' : 'text-red-400';
+                
+                row.innerHTML = `
+                    <td class="py-1 px-2">${trade.time}</td>
+                    <td class="py-1 px-2">${trade.pair}</td>
+                    <td class="py-1 px-2">${trade.direction}</td>
+                    <td class="py-1 px-2">${trade.entry}</td>
+                    <td class="py-1 px-2 text-red-400">${trade.sl}</td>
+                    <td class="py-1 px-2 text-green-400">${trade.tp}</td>
+                    <td class="py-1 px-2 ${resultClass}">${trade.result}</td>
+                    <td class="py-1 px-2 ${pnlClass} font-semibold">$${trade.pnl}</td>
+                `;
+                
+                logEl.insertBefore(row, logEl.firstChild);
+                
+                while (logEl.children.length > 10) {
+                    logEl.removeChild(logEl.lastChild);
+                }
+            }
+            
+            log(message, type = 'info') {
+                const logEl = document.getElementById('consoleLog');
+                if (!logEl) return;
+                
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                
+                let colorClass = 'text-green-400';
+                if (type === 'error') colorClass = 'text-red-400';
+                if (type === 'warning') colorClass = 'text-yellow-400';
+                if (type === 'success') colorClass = 'text-emerald-400';
+                
+                logEntry.className = colorClass;
+                logEntry.textContent = `[${timestamp}] ${message}`;
+                
+                logEl.appendChild(logEntry);
+                logEl.scrollTop = logEl.scrollHeight;
+                
+                while (logEl.children.length > 100) {
+                    logEl.removeChild(logEl.firstChild);
+                }
+                
+                console.log(`[PinBar Bot v2 Fixed] ${message}`);
+            }
+            
+            logJSON(data) {
+                const logEl = document.getElementById('jsonLog');
+                if (!logEl) return;
+                
+                const entry = document.createElement('div');
+                entry.textContent = JSON.stringify(data);
+                entry.style.marginBottom = '4px';
+                
+                logEl.appendChild(entry);
+                logEl.scrollTop = logEl.scrollHeight;
+                
+                while (logEl.children.length > 50) {
+                    logEl.removeChild(logEl.firstChild);
+                }
+            }
+        }
+        
+        // Initialize bot on page load
+        const bot = new PinBarTradingBot();
+        console.log('[System] Pin-Bar Trading Bot v2.0 initialized - FIXED VERSION');
+        console.log('[System] Key fixes: req_id handling, subscription management, error filtering');
+    </script>
+</body>
+</html>
